@@ -1,0 +1,7 @@
+
+
+**/myenv/
+**/yolo26n_ncnn_model/
+
+.python-version
+yolo26n.pt
