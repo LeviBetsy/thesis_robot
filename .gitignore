@@ -1,6 +1,5 @@
 
-
-**/myenv/
+myvenv*/
 **/yolo26n_ncnn_model/
 
 .python-version
