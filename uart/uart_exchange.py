@@ -2,7 +2,7 @@ import serial
 import time
 
 
-SERIAL_PORT = '/dev/ttyAMA0' 
+SERIAL_PORT = '/dev/ttyAMA10' 
 BAUD_RATE = 115200
 
 try:

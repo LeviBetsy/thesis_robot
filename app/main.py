@@ -1,14 +1,11 @@
 import cv2
 from ultralytics import YOLO
+from detection_filter import *
 
 # Load a YOLO26n PyTorch model
 model = YOLO("yolo26n.pt")
-
-# Export the model to NCNN format
 model.export(format="ncnn")  # creates 'yolo26n_ncnn_model'
-
-# Load the exported NCNN model
-ncnn_model = YOLO("yolo26n_ncnn_model")
+ncnn_model = YOLO("yolo26n_ncnn_model") # Load the exported NCNN model for embedded devices
 
 # Initialize USB camera
 cam = cv2.VideoCapture(0)
@@ -23,7 +20,11 @@ while True:
 
     # Run YOLO26 inference on the frame
     results = ncnn_model(image)
-    
+
+    #test find location of mouse
+    mouse_class_id = find_class_id(ncnn_model, "mouse")
+    box_mouse = get_bounds(results, mouse_class_id)  # Assuming class_id=0 corresponds to the mouse
+
     # Visualize the results on the frame
     annotated_frame = results[0].plot()
 

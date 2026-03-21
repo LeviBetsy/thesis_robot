@@ -4,3 +4,5 @@ myvenv*/
 
 .python-version
 yolo26n.pt
+
+__pycache__/
