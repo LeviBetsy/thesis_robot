@@ -6,3 +6,5 @@ myvenv*/
 yolo26n.pt
 
 __pycache__/
+
+.vscode

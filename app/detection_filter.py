@@ -9,9 +9,9 @@ def find_class_id(model, class_name):
     Returns:
         The class ID corresponding to the specified class name, or None if not found.
     """
-    for idx, name in enumerate(model.names):
+    for class_id, name in model.names.items():
         if name.lower() == class_name.lower():
-            return idx
+            return class_id
     return None
 
 def get_bounds(model_result, class_id):
@@ -25,10 +25,9 @@ def get_bounds(model_result, class_id):
     Returns:
         A list of bounding box coordinates (x1, y1, x2, y2) for the specified class ID.
     """
+    boxes = model_result[0].boxes
     bounds = []
-    for box in model_result[0].boxes:
-        if box.cls == class_id:
-            print(type(box.xyxy[0]))
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            bounds.append((x1, y1, x2, y2))
+    for i in range(0, len(boxes.cls)):
+        if boxes.cls[i] == class_id:
+            print(i)
     return bounds
