@@ -26,6 +26,7 @@ while True:
 
     #test find location of mouse
     box_mouse = get_bounds(results, class_id_mouse) 
+    print(box_mouse)
 
     # Visualize the results on the frame
     annotated_frame = results[0].plot()
@@ -34,8 +35,12 @@ while True:
     cv2.imshow("Camera", annotated_frame)
 
     # Break the loop if 'q' is pressed
-    if cv2.waitKey(1) == ord("q"):
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord("q"):
         break
+    elif key == ord("s"):
+        cv2.imwrite("./app/data/captured_image.jpg", annotated_frame)
+
 
 # cam.release()  # Release the camera resource
 # # Release resources and close windows
