@@ -1,5 +1,14 @@
 import serial
 import time
+from enum import Enum
+
+class Instruction_t(Enum):
+    IDLE = '0'
+    FORWARD = '1'
+    BACKWARD = '2'
+    LEFT = '3'
+    RIGHT = '4'
+
 
 class SerialManager:
     def __init__(self, port='/dev/ttyAMA0', baudrate=115200, timeout=1):

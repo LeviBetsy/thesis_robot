@@ -1,6 +1,7 @@
 import cv2
 from ultralytics import YOLO
 from detection_filter import *
+from uart_exchange import SerialManager, Instruction_t
 import ultralytics
 import math
 
@@ -14,6 +15,11 @@ print(class_id_mouse)
 # Initialize USB camera
 cam = cv2.VideoCapture(0)
 
+
+#UART
+cmd = Instruction_t.IDLE
+communicator = SerialManager(port='/dev/ttyAMA0', baudrate=115200)
+communicator.connect()
 while True:
     # Capture frame-by-frame
     ret, image = cam.read()
@@ -27,26 +33,39 @@ while True:
 
     #test find location of mouse
     pixel_width = 0
-    box_mouse = get_bounds(results, 0) 
-    print(box_mouse)
+    box_mouse = get_bounds(results, class_id_mouse) 
     if (box_mouse):
         pixel_width = abs((box_mouse[0][0] - box_mouse[0][2]))
-        print(f"width of mouse in pixel {pixel_width}")
-    # Visualize the results on the frame
-    annotated_frame = results[0].plot()
+        # print(f"width of mouse in pixel {pixel_width}")
+        dist = (391* 11)/ pixel_width
+        # print(f"distance using ratio = {dist}cm")
 
-    # Display the resulting frame
-    cv2.imshow("Camera", annotated_frame)
+        if(dist > 20) and (cmd != Instruction_t.FORWARD):
+            cmd = Instruction_t.FORWARD
+            communicator.send_string(cmd.value)
+            print("send forward command")
+
+    elif (cmd != Instruction_t.IDLE):
+        cmd = Instruction_t.IDLE
+        communicator.send_string(cmd.value)
+        print("send idle command")
+
+    # #***********************visual******************************
+    # # Visualize the results on the frame
+    # annotated_frame = results[0].plot()
+
+    # # Display the resulting frame
+    # cv2.imshow("Camera", annotated_frame)
 
     # Break the loop if 'q' is pressed
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
-    elif key == ord("s"):
-        output_file = "./app/data/captured_image"
-        cv2.imwrite(f"{output_file}.jpg", annotated_frame)
-        with open(f"{output_file}.txt", "w") as f:
-            f.write(f"pixel width: {pixel_width}\n")
+    # elif key == ord("s"):
+    #     output_file = "./app/data/captured_image40"
+    #     cv2.imwrite(f"{output_file}.jpg", annotated_frame)
+    #     with open(f"{output_file}.txt", "w") as f:
+    #         f.write(f"pixel width: {pixel_width}\n")
 
 
 # cam.release()  # Release the camera resource
