@@ -8,3 +8,7 @@ yolo26n.pt
 __pycache__/
 
 .vscode
+
+app/data/*
+
+.DS_Store

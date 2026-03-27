@@ -29,5 +29,8 @@ def get_bounds(model_result, class_id):
     bounds = []
     for i in range(0, len(boxes.cls)):
         if boxes.cls[i] == class_id:
-            print(i)
+            xyxy = boxes.xyxy.data[i]
+            bounds.append(xyxy)
+            # bounds.append(boxes.xyxy)
+            # print("i")
     return bounds

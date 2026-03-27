@@ -2,11 +2,12 @@ import cv2
 from ultralytics import YOLO
 from detection_filter import *
 import ultralytics
+import math
 
 #TODO: there has to be a better way to load models
 # Load a YOLO26n PyTorch model
-model = YOLO("yolo26n.pt")
-model.export(format="ncnn")  # creates 'yolo26n_ncnn_model'
+# model = YOLO("yolo26n.pt")
+# model.export(format="ncnn")  # creates 'yolo26n_ncnn_model'
 ncnn_model = YOLO("yolo26n_ncnn_model", task = "detect") # Load the exported NCNN model for embedded devices
 class_id_mouse = find_class_id(ncnn_model, "mouse") #mouse should be 64
 print(class_id_mouse)
@@ -25,9 +26,12 @@ while True:
     results = ncnn_model(image)
 
     #test find location of mouse
-    box_mouse = get_bounds(results, class_id_mouse) 
+    pixel_width = 0
+    box_mouse = get_bounds(results, 0) 
     print(box_mouse)
-
+    if (box_mouse):
+        pixel_width = abs((box_mouse[0][0] - box_mouse[0][2]))
+        print(f"width of mouse in pixel {pixel_width}")
     # Visualize the results on the frame
     annotated_frame = results[0].plot()
 
@@ -39,7 +43,10 @@ while True:
     if key == ord("q"):
         break
     elif key == ord("s"):
-        cv2.imwrite("./app/data/captured_image.jpg", annotated_frame)
+        output_file = "./app/data/captured_image"
+        cv2.imwrite(f"{output_file}.jpg", annotated_frame)
+        with open(f"{output_file}.txt", "w") as f:
+            f.write(f"pixel width: {pixel_width}\n")
 
 
 # cam.release()  # Release the camera resource
