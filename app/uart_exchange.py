@@ -47,6 +47,22 @@ class SerialManager:
         else:
             print("Serial port is not open. Cannot send data.")
 
+    def send_command(self, inst_t, leftduty, rightduty):
+        if self.ser and self.ser.is_open:
+            try:
+                header = 0xAA
+                l_high, l_low = (leftduty >> 8) & 0xFF, leftduty & 0xFF
+                r_high, r_low = (rightduty >> 8) & 0xFF, rightduty & 0xFF
+                inst = inst_t & 0xFF
+                checksum = inst ^ l_high ^ l_low ^ r_high ^ r_low
+                packet = bytearray([header, inst, l_high, l_low, r_high, r_low, checksum])
+                self.ser.write(packet)
+                print(f"Sent")
+            except Exception as e:
+                print(f"Failed to send data: {e}")
+        else:
+            print("Serial port is not open. Cannot send data.")
+
     def close(self):
         """Closes the serial port connection."""
         if self.ser and self.ser.is_open:
@@ -64,8 +80,14 @@ if __name__ == "__main__":
         # # Input the string you want to send here
         # communicator.send_string("Hello World\n")
         while True:
-            cmd = input("Enter a command to send (or 'exit' to quit): ")
-            communicator.send_string(cmd)
+            print("Enter a command to send (enter in the format INST,LEFTDUTY,RIGHTCYCLE ): ")
+            print("INST: 0-4 for STOP, FORWARD, BACKWARD, lEFT, RIGHT")
+            print("DUTYCYCLE from 0-14998")
+            cmd = input()
+            parts = cmd.split(',')
+            communicator.send_command(int(parts[0]), int(parts[1]), int(parts[2]))
+
+            # communicator.send_string(cmd)
             time.sleep(1)  # Keep the program running to maintain the serial connection
         
     except KeyboardInterrupt:
