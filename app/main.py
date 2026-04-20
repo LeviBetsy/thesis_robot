@@ -37,14 +37,25 @@ while True:
     if (box_mouse):
         pixel_width = abs((box_mouse[0][0] - box_mouse[0][2]))
         # print(f"width of mouse in pixel {pixel_width}")
-        dist = (391* 11)/ pixel_width
+        # dist = (391* 11)/ pixel_width
+
+        dist = -0.227*pixel_width + 64.7
         # print(f"distance using ratio = {dist}cm")
 
-        if(dist > 20) and (cmd != Instruction_t.FORWARD):
-            cmd = Instruction_t.FORWARD
-            communicator.send_string(cmd.value)
-            print("send forward command")
-
+        #if you see a mouse and it's far away go forward
+        if(dist > 20):
+            #dont resend UART if already going forward
+            if (cmd != Instruction_t.FORWARD):
+                cmd = Instruction_t.FORWARD
+                communicator.send_string(cmd.value)
+                print("send forward command")
+        #else if you see a mouse and it's within distance, stop
+        elif (dist <=20):
+            if (cmd != Instruction_t.IDLE):
+                cmd = Instruction_t.IDLE
+                communicator.send_string(cmd.value)
+                print("send idle command")
+    #if you don't see the mouse, stop
     elif (cmd != Instruction_t.IDLE):
         cmd = Instruction_t.IDLE
         communicator.send_string(cmd.value)
