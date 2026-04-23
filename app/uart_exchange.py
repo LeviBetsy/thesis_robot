@@ -1,5 +1,7 @@
 import serial
+import threading
 import time
+import struct #for unpacking big-Endian message
 from enum import Enum
 
 class Instruction_t(Enum):
@@ -63,6 +65,52 @@ class SerialManager:
         else:
             print("Serial port is not open. Cannot send data.")
 
+    def poll_receive(self):
+        """Continuously polls the serial port for the 4-byte packet."""
+        if not (self.ser and self.ser.is_open):
+            print("Serial port is not open. Cannot receive data.")
+            return
+
+        print("Listening for incoming data...")
+        
+        while self.ser.is_open:
+            try:
+                # Block until at least one byte is in the buffer
+                if self.ser.in_waiting > 0:
+                    # Read one byte at a time looking for the start byte
+                    start_byte = self.ser.read(1)
+                    
+                    if start_byte == b'\xAA':
+                        # Read the remaining 5 bytes: LC_MSB, LC_LSB, RC_MSB, RC_LSB, checksum
+                        payload = self.ser.read(5)
+                        
+                        if len(payload) == 5:
+                            # '>' means Big-Endian (High Byte first)
+                            # 'h' means signed 16-bit integer (takes 2 bytes each)
+                            # 'B' means unsigned 8-bit integer (checksum)
+                            data1_signed, data2_signed, received_checksum = struct.unpack('>hhB', payload)
+                            
+                            # Reconstruct the raw bytes to calculate the expected checksum
+                            lc_high = (data1_signed >> 8) & 0xFF
+                            lc_low  = data1_signed & 0xFF
+                            rc_high = (data2_signed >> 8) & 0xFF
+                            rc_low  = data2_signed & 0xFF
+                            
+                            # Note: The C code XORs 0xAA in its checksum calculation!
+                            expected_checksum = lc_high ^ lc_low ^ rc_high ^ rc_low
+                            
+                            with open("uart_log.txt", "a") as log_file:
+                                if received_checksum == expected_checksum:
+                                    log_file.write(f"Valid Packet -> LCount: {data1_signed}, RCount: {data2_signed}\n")
+                                else:
+                                    print("Incomplete packet received. Waiting for next start byte.")
+            
+            except serial.SerialException:
+                # Exit cleanly if the port is closed while reading
+                break
+            except Exception as e:
+                print(f"Receive error: {e}")
+
     def close(self):
         """Closes the serial port connection."""
         if self.ser and self.ser.is_open:
@@ -77,9 +125,14 @@ if __name__ == "__main__":
     #note that exception does not need to be of type KeyboardInterrupt, it can be any exception that goes to finally
     try:
         communicator.connect()
+        receive_thread = threading.Thread(target=communicator.poll_receive, daemon=True)
+        receive_thread.start()
+
         # # Input the string you want to send here
         # communicator.send_string("Hello World\n")
         while True:
+            # communicator.poll_receive()
+
             print("Enter a command to send (enter in the format INST,LEFTDUTY,RIGHTCYCLE ): ")
             print("INST: 0-4 for STOP, FORWARD, BACKWARD, lEFT, RIGHT")
             print("DUTYCYCLE from 0-14998")
@@ -87,7 +140,7 @@ if __name__ == "__main__":
             parts = cmd.split(',')
             communicator.send_command(int(parts[0]), int(parts[1]), int(parts[2]))
 
-            # communicator.send_string(cmd)
+            communicator.send_string(cmd)
             time.sleep(1)  # Keep the program running to maintain the serial connection
         
     except KeyboardInterrupt:
