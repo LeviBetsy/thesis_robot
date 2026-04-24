@@ -3,6 +3,7 @@ import threading
 import time
 import struct #for unpacking big-Endian message
 from enum import Enum
+import queue
 
 class Instruction_t(Enum):
     IDLE = '0'
@@ -12,13 +13,14 @@ class Instruction_t(Enum):
     RIGHT = '4'
 
 
-class SerialManager:
+class MSP432Uart:
     def __init__(self, port='/dev/ttyAMA0', baudrate=115200, timeout=1):
         """Initializes the serial connection parameters."""
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
         self.ser = None
+        self.data_queue = queue.Queue()
 
     def connect(self):
         """Attempts to open the serial port."""
@@ -31,11 +33,21 @@ class SerialManager:
                 bytesize=serial.EIGHTBITS,
                 timeout=self.timeout
             )
+
+            #start the receiving thread to fill up data
+            receive_thread = threading.Thread(target=self.poll_receive, daemon=True)
+            receive_thread.start()
+
             print(f"Serial port {self.port} opened successfully.")
         except Exception as e:
             print(f"Error opening serial port: {e}")
             self.ser = None
             raise # Re-raise the exception to handle it in the calling code
+    
+    #block the main thread until the data is returned, ie there is tachometer data from the msp432
+    def get_data(self):
+        lcount, rcount = self.data_queue.get()
+        return lcount, rcount
 
     def send_string(self, message):
         """Encodes a string to bytes and sends it over the serial port."""
@@ -64,6 +76,7 @@ class SerialManager:
                 print(f"Failed to send data: {e}")
         else:
             print("Serial port is not open. Cannot send data.")
+        
 
     def poll_receive(self):
         """Continuously polls the serial port for the 4-byte packet."""
@@ -96,14 +109,17 @@ class SerialManager:
                             rc_high = (data2_signed >> 8) & 0xFF
                             rc_low  = data2_signed & 0xFF
                             
-                            # Note: The C code XORs 0xAA in its checksum calculation!
                             expected_checksum = lc_high ^ lc_low ^ rc_high ^ rc_low
                             
-                            with open("uart_log.txt", "a") as log_file:
-                                if received_checksum == expected_checksum:
-                                    log_file.write(f"Valid Packet -> LCount: {data1_signed}, RCount: {data2_signed}\n")
-                                else:
-                                    print("Incomplete packet received. Waiting for next start byte.")
+                            # with open("uart_log.txt", "a") as log_file:
+                            #     if received_checksum == expected_checksum:
+                            #         log_file.write(f"Valid Packet -> LCount: {data1_signed}, RCount: {data2_signed}\n")
+                            #     else:
+                            #         print("Incomplete packet received. Waiting for next start byte.")
+                            if received_checksum == expected_checksum:
+                                self.data_queue.put((data1_signed, data2_signed))
+                            else:
+                                print("Incomplete packet received. Waiting for next start byte.")
             
             except serial.SerialException:
                 # Exit cleanly if the port is closed while reading
@@ -117,33 +133,41 @@ class SerialManager:
             self.ser.close()
             print(f"Serial port {self.port} closed.")
 
-# --- Example Usage ---
+
+# --- Execution ---
 if __name__ == "__main__":
-    # Create an instance of the class
-    communicator = SerialManager(port='/dev/ttyAMA0', baudrate=115200)
+    msp432_uart = MSP432Uart(port='/dev/ttyAMA0', baudrate=115200)
+    msp432_uart.connect()
 
-    #note that exception does not need to be of type KeyboardInterrupt, it can be any exception that goes to finally
     try:
-        communicator.connect()
-        receive_thread = threading.Thread(target=communicator.poll_receive, daemon=True)
-        receive_thread.start()
+    # 1. O  pen the log file once before entering the fast loop
+        with open("odometry_log.txt", "a") as log_file:
+            print("Listening for UART data. Press Ctrl+C to stop.")
+            
+            while True:
+                # if the queue is empty, resulting in zero wasted CPU cycles.
+                l_count, r_count = msp432_uart.get_data() # NOTE! This method is blocking, ie the whole thread is being paused 
+                
+                # 2. Format the string
+                log_entry = f"LCount: {l_count}, RCount: {r_count}\n"
+                
+                # 3. Write to the file
+                log_file.write(log_entry)
+                
+                # 4. Flush the buffer: This forces the Pi to write to the SD card immediately.
+                # Without this, if your robot loses power or crashes unexpectedly, 
+                # you might lose the last few seconds of data sitting in the RAM buffer.
+                log_file.flush()
+                
+                # Optional: Print to console so you can monitor it live
+                print(f"Logged: {log_entry.strip()}")
 
-        # # Input the string you want to send here
-        # communicator.send_string("Hello World\n")
-        while True:
-            # communicator.poll_receive()
-
-            print("Enter a command to send (enter in the format INST,LEFTDUTY,RIGHTCYCLE ): ")
-            print("INST: 0-4 for STOP, FORWARD, BACKWARD, lEFT, RIGHT")
-            print("DUTYCYCLE from 0-14998")
-            cmd = input()
-            parts = cmd.split(',')
-            communicator.send_command(int(parts[0]), int(parts[1]), int(parts[2]))
-
-            communicator.send_string(cmd)
-            time.sleep(1)  # Keep the program running to maintain the serial connection
-        
     except KeyboardInterrupt:
-        print("\nExiting...")
+        # Catches the Ctrl+C command from the terminal
+        print("\nKeyboard interrupt detected. Exiting loop...")
+
     finally:
-        communicator.close()
+        # The 'finally' block guarantees this code runs no matter how the try block ends
+        # (whether by KeyboardInterrupt, a random crash, or a normal exit).
+        print("Closing UART connection...")
+        msp432_uart.close()

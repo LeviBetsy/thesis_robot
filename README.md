@@ -8,3 +8,5 @@
 ## Running YOLO v26
 - pip install opencv-python ultralytics pyserial
 
+
+ssh -L 5000:localhost:5000 USER@ADDRESS
