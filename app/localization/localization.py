@@ -71,7 +71,7 @@ class Localization:
             self.robot_y = y_val
             self.robot_theta = theta % (2*math.pi) 
     
-    def init_odometry_thread(self, msp432_uart: MSP432Uart):
+    def init_odometry_thread(self, msp432_uart: MSP432Uart): #Start thread to change localization data using UART buffer
         def odom_loop():
             while True:
                 # Retrieve the latest counts from the UART interface

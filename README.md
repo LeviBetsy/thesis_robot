@@ -13,3 +13,6 @@
 
 tail -f data/odometry_log.txt 
 ssh -L 5000:localhost:5000 USER@ADDRESS
+
+
+python3 -m test.twitch_test.controller

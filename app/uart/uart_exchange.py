@@ -19,14 +19,9 @@ class MSP432Uart:
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self.ser = None
         self.data_queue = queue.Queue()
         self._is_logging = False
-
-    def connect(self):
-        """Attempts to open the serial port."""
-        try:
-            self.ser = serial.Serial(
+        self.ser = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
                 parity=serial.PARITY_NONE,
@@ -35,19 +30,20 @@ class MSP432Uart:
                 timeout=self.timeout
             )
 
-            #start the receiving thread to fill up data
+    def start_receiving(self): #start the receiving thread to fill up data
+        """Attempts to open the serial port."""
+        try:
             receive_thread = threading.Thread(target=self.poll_receive, daemon=True)
             receive_thread.start()
 
             print(f"Serial port {self.port} opened successfully.")
         except Exception as e:
             print(f"Error opening serial port: {e}")
-            self.ser = None
             raise # Re-raise the exception to handle it in the calling code
     
     #block the main thread until the data is returned, ie there is tachometer data from the msp432
     def get_data(self):
-        lcount, rcount = self.data_queue.get()
+        lcount, rcount = self.data_queue.get() #queue.get blocks the whole thread until data is returned
         return lcount, rcount
 
     def log_tach(self, filename="data/odometry_log.txt"):
@@ -81,7 +77,6 @@ class MSP432Uart:
             try:
                 # Strings must be encoded to bytes before sending
                 self.ser.write(message.encode('utf-8'))
-                print(f"Sent: {message}")
             except Exception as e:
                 print(f"Failed to send data: {e}")
         else:
@@ -97,7 +92,6 @@ class MSP432Uart:
                 checksum = inst ^ l_high ^ l_low ^ r_high ^ r_low
                 packet = bytearray([header, inst, l_high, l_low, r_high, r_low, checksum])
                 self.ser.write(packet)
-                print(f"Sent")
             except Exception as e:
                 print(f"Failed to send data: {e}")
         else:

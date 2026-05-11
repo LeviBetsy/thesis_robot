@@ -3,12 +3,11 @@ from app.localization.localization import *
 import math
 
 msp432_uart = MSP432Uart()
-msp432_uart.connect()
 
+msp432_uart.start_receiving() #start thread to listen to odometry data from MSP432 and fill buffer
 loc = Localization(width=214, length=356)
-loc.stream_occupancy_grid()
-
-loc.init_odometry_thread(msp432_uart)
+loc.stream_occupancy_grid() #start thread to stream odometry data to Flask Server
+loc.init_odometry_thread(msp432_uart) #start thread to change localization using UART buffer
 
 
 try:
