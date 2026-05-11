@@ -7,7 +7,7 @@ class RobotController:
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind(('0.0.0.0', self.port))
+        self.sock.bind(('127.0.0.1', self.port))
         self.running = True
 
     def start(self):

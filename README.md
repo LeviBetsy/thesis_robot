@@ -12,7 +12,8 @@
 
 
 tail -f data/odometry_log.txt 
-ssh -L 5000:localhost:5000 USER@ADDRESS
+ssh -L 5000:localhost:5000 -L 8080:localhost:8080 USER@PI_IP_ADDRESS
+This is for opening an SSH tunnel so what gets sent to localhost 8080 on the laptop, gets sent to the Pi's 8080
 
 
 python3 -m test.twitch_test.controller
