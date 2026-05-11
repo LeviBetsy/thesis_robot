@@ -8,7 +8,7 @@
 ## Running YOLO v26
 - pip install opencv-python ultralytics pyserial 
 ## Running Test code
-- pip install pynput
+- pip install pynput python-dotenv
 
 
 tail -f data/odometry_log.txt 

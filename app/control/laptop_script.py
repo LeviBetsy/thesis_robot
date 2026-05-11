@@ -1,9 +1,16 @@
 import socket
+import os
 from pynput import keyboard
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # CONFIGURATION
-PI_IP_ADDRESS = "192.168.1.XX" # <--- Put your Pi's IP here
-PORT = 5005
+PI_IP_ADDRESS = os.getenv("PI_IP_ADDRESS")
+PORT = int(os.getenv("UDP_PORT", 5005)) # Default to 5005 if not found
+
+if not PI_IP_ADDRESS:
+    raise ValueError("PI_IP_ADDRESS not found in .env file")
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 pressed_keys = set()
@@ -43,6 +50,7 @@ def on_release(key):
         pressed_keys.remove(key)
         update()
 
-print(f"Controller active. Sending commands to {PI_IP_ADDRESS}")
-with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-    listener.join()
+if __name__ == "__main__":
+    print(f"Controller active. Sending commands to {PI_IP_ADDRESS}")
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()

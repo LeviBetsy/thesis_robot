@@ -1,6 +1,6 @@
 from app.uart.uart_exchange import *
 from app.localization.localization import *
-from app.control.keyboard_controller_physical import *
+from app.control.keyboard_controller_ssh import *
 import math
 
 msp432_uart = MSP432Uart()
