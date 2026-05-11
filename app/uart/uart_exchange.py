@@ -21,6 +21,7 @@ class MSP432Uart:
         self.timeout = timeout
         self.ser = None
         self.data_queue = queue.Queue()
+        self._is_logging = False
 
     def connect(self):
         """Attempts to open the serial port."""
@@ -48,6 +49,31 @@ class MSP432Uart:
     def get_data(self):
         lcount, rcount = self.data_queue.get()
         return lcount, rcount
+
+    def log_tach(self, filename="data/odometry_log.txt"):
+        self._is_logging = True
+        
+        with open(filename, "a") as log_file:
+            print(f"Listening for UART data. Writing to {filename}. Press Ctrl+C to stop.")
+            
+            # Using the flag instead of 'while True' allows for safe thread shutdown
+            while self._is_logging:
+                try:
+                    # Called via self instead of the instance name
+                    l_count, r_count = self.get_data() 
+                    
+                    log_entry = f"LCount: {l_count}, RCount: {r_count}\n"
+                    log_file.write(log_entry)
+                    log_file.flush()
+                
+                
+                except Exception as e:
+                    print(f"Error reading UART data: {e}")
+                    break
+
+    def stop_logging(self):
+        """Call this method to break the loop and safely close the thread."""
+        self._is_logging = False
 
     def send_string(self, message):
         """Encodes a string to bytes and sends it over the serial port."""

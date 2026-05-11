@@ -6,7 +6,10 @@
 - pyenv local 3.12.13
 - python -m venv myvenv (then activate environment)
 ## Running YOLO v26
-- pip install opencv-python ultralytics pyserial
+- pip install opencv-python ultralytics pyserial 
+## Running Test code
+- pip install pynput
 
 
+tail -f data/odometry_log.txt 
 ssh -L 5000:localhost:5000 USER@ADDRESS
