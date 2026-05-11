@@ -44,9 +44,12 @@ def update_logic():
         if left: send_to_pi(1, 2500, 5000)
         elif right: send_to_pi(1, 5000, 2500)
         else: send_to_pi(1, 5000, 5000)
-    elif down: send_to_pi(2, 5000, 5000)
-    elif left: send_to_pi(3, 5000, 5000)
-    elif right: send_to_pi(4, 5000, 5000)
+    elif down:
+        if left: send_to_pi(2, 2500, 5000)
+        elif right: send_to_pi(2, 5000, 2500)
+        else: send_to_pi(2, 5000, 5000)
+    elif left: send_to_pi(3, 4000, 4000)
+    elif right: send_to_pi(4, 4000, 4000)
     else: send_to_pi(0, 0, 0)
 
 def on_press(key):
