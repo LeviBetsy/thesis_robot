@@ -1,26 +1,39 @@
 import socket
 import threading
 
-class RobotController: #a listener to listen to the ssh-ing laptop for commands to send to the MSP432
-    def __init__(self, command_callback, port=5005):
+class RobotController:
+    def __init__(self, command_callback, port=8080):
         self.command_callback = command_callback
         self.port = port
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-        self.sock.bind(('', self.port))
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # TCP
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(('0.0.0.0', self.port))
         self.running = True
 
     def start(self):
-        print(f"Listening for laptop commands on UDP port {self.port}...")
+        self.sock.listen(1)
+        print(f"TCP Server listening on port {self.port}...")
+        
         while self.running:
             try:
-                data, addr = self.sock.recvfrom(1024)
-                # Data format: "INST,LEFT,RIGHT"
-                msg = data.decode('utf-8')
-                parts = [int(x) for x in msg.split(',')]
-                if len(parts) == 3:
-                    self.command_callback(parts[0], parts[1], parts[2])
+                conn, addr = self.sock.accept()
+                print(f"Connected by {addr}")
+                with conn:
+                    while self.running:
+                        data = conn.recv(1024)
+                        if not data:
+                            break 
+                        
+                        msg = data.decode('utf-8')
+                        # Handle multiple commands if they arrive stuck together
+                        for cmd_str in msg.strip().split('\n'):
+                            if cmd_str:
+                                parts = [int(x) for x in cmd_str.split(',')]
+                                if len(parts) == 3:
+                                    self.command_callback(parts[0], parts[1], parts[2])
             except Exception as e:
-                print(f"Receiver Error: {e}")
+                print(f"Connection lost or error: {e}")
+                self.command_callback(0, 0, 0) # Safety stop
 
     def stop(self):
         self.running = False
