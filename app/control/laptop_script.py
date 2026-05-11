@@ -1,3 +1,10 @@
+# This file is meant to be ran on the ssh-ing device onto the Pi
+# Its purpose is to create a listener on the ssh-ing device's keyboard
+# And translate those keyboard input into movement command for the Pi
+# The script is meant to send the commands over an ssh-tunnel on the 8080 port to the Pi's localhost
+# So don't forget to set up that tunnel when you SSH
+
+
 import socket
 import os
 import time

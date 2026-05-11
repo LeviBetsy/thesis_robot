@@ -1,3 +1,29 @@
+# """
+# keyboard_controller_ssh.py
+
+# Overview:
+# This module provides a TCP server (RobotController) designed to receive control 
+# signals from a remote client, typically forwarded over an SSH tunnel. It 
+# decouples the network listening logic from the robot's execution logic using 
+# a callback mechanism and multi-threading.
+
+# Technical Details:
+# - Protocol: TCP (SOCK_STREAM) bound to 127.0.0.1.
+# - Concurrency: The 'connect' loop runs in a daemonized background thread to 
+#   prevent blocking the main execution loop.
+# - Data Format: Expects UTF-8 encoded strings in the format "int,int,int\n". 
+# - Command Handling: Supports handling multiple commands in a single packet 
+#   by splitting on newline characters.
+
+# Usage:
+# 1. Define a callback function that accepts three integers: 
+#    def my_callback(val1, val2, val3): ... (presumably this call back function is the function to send DIR,LDUTY,RDUTY over UART)
+# 2. Instantiate RobotController(command_callback=my_callback, port=8080).
+# 3. Call .start() to begin listening for incoming connections.
+# 4. On connection loss, the controller automatically triggers a safety stop (0,0,0).
+# """
+
+
 import socket
 import threading
 
