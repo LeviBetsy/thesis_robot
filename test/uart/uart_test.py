@@ -2,7 +2,7 @@ from app.uart.uart_exchange import *
 
 
 msp432_uart = MSP432Uart()
-msp432_uart.connect()
+# msp432_uart.connect()
 
 logging_thread = threading.Thread(target=msp432_uart.log_tach, daemon=True)
 

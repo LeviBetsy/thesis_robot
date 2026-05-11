@@ -11,6 +11,10 @@ class RobotController:
         self.running = True
 
     def start(self):
+        keyboard_thread = threading.Thread(target=self.connect, daemon=True)
+        keyboard_thread.start()
+
+    def connect(self):
         self.sock.listen(1)
         print(f"TCP Server listening on port {self.port}...")
         

@@ -7,7 +7,7 @@ import math
 from app.uart.uart_exchange import *
 
 class Localization:
-    def __init__(self, width, length):
+    def __init__(self, width, length, cell_size):
         """
         Initializes the localization module.
         width (m): Size of the X-axis in grid cells
@@ -15,20 +15,20 @@ class Localization:
         """
         self.width = width
         self.length = length
+        self.cell_size = cell_size
         
         # Robot state variables
-        self.robot_theta = 0
-        self.robot_x = 0
-        self.robot_y = 0
+        self.robot_theta = 0 #angle facing in radians
+        self.robot_x: float = 0 #robot_x is a float!
+        self.robot_y: float = 0 #robot_y is a float!
 
         #Robot description
         self.n = 360 #number of slots/rotation
-        self.d = 70 #70 cm diameter
-        self.w = 122 #122cm distance between wheels
+        self.d = 70 #70 mm diameter
+        self.w = 122 #127mm distance between wheels
         self.c = math.pi*self.d
         
         # Initialize grid
-        self.grid = None
         self.build_occupancy_grid(self.width, self.length)
         self.set_coor_robot()
 
@@ -57,18 +57,17 @@ class Localization:
         Sets the robot's current (X, Y) grid coordinate.
         If no arguments are provided, defaults to the exact center of the map. Looking down
         """
-        if x is None or y is None:
-            self.robot_x = self.width // 2
-            self.robot_y = self.length // 2
-            self.robot_theta = 0
+        if x is None or y is None or theta is None:
+            self.robot_x = self.width / 2
+            self.robot_y = self.length / 2
+            self.robot_theta = math.pi*3/2
+            print(f"starting robot: {self.robot_y}")
         else:
-            x_val = int(x)
-            y_val = int(y)
-        
-            if x_val < 0 or x_val >= self.width or y_val < 0 or y_val >= self.length:
-                raise ValueError(f"Coordinate out of bounds: ({x_val}, {y_val})")
-            self.robot_x = x_val
-            self.robot_y = y_val
+            if x < 0 or x >= self.width or y < 0 or y >= self.length:
+                return #TODO: CHANGE THIS
+                raise ValueError(f"Coordinate out of bounds: ({x}, {y})")
+            self.robot_x = x
+            self.robot_y = y
             self.robot_theta = theta % (2*math.pi) 
     
     def init_odometry_thread(self, msp432_uart: MSP432Uart): #Start thread to change localization data using UART buffer
@@ -93,8 +92,8 @@ class Localization:
         dr = RCount*self.c/self.n
         d = (dl + dr)/2 #distance traveled by the middle point
         delta_theta = (dr - dl)/self.w
-        new_x = self.robot_x + d*math.cos(self.robot_theta + (delta_theta/2))
-        new_y = self.robot_y + d*math.sin(self.robot_theta + (delta_theta/2))
+        new_x = self.robot_x + (d*math.cos(self.robot_theta + (delta_theta/2)))/self.cell_size
+        new_y = self.robot_y - (d*math.sin(self.robot_theta + (delta_theta/2)))/self.cell_size
         new_theta = self.robot_theta + delta_theta
         self.set_coor_robot(new_x, new_y, new_theta)
 
@@ -105,42 +104,57 @@ class Localization:
         app = Flask(__name__)
 
         def generate_frames():
+            # Define display constants must be a multiple of width and length
+            scale_factor = 10
+            DISPLAY_WIDTH = self.width * scale_factor
+            DISPLAY_LENGTH = self.length * scale_factor
+            
+            # Calculate scale factors
+            # sx = pixels_per_cell_width, sy = pixels_per_cell_height
+            sx = DISPLAY_WIDTH / self.width
+            sy = DISPLAY_LENGTH / self.length
+
             while True:
-                # 1. Copy the grid for visualization so we don't modify the actual map data
-                vis_grid = self.grid.copy()
+                # 1. Resize the grid first using NEAREST to keep cell boundaries sharp
+                vis_image = cv2.resize(self.grid.copy(), (DISPLAY_WIDTH, DISPLAY_LENGTH), interpolation=cv2.INTER_NEAREST)
                 
-                # 2. Draw the robot on the visual frame (a dark gray circle)
-                # Ensure the robot is within bounds before drawing
+                # Convert to BGR so we can use colors for the grid/labels
+                vis_image = cv2.cvtColor(vis_image, cv2.COLOR_GRAY2BGR)
+
+                # 2. Draw Grid Lines
+                grid_color = (200, 200, 200) # Light gray
+                # Vertical lines
+                for x in range(self.width + 1):
+                    line_x = int(x * sx)
+                    cv2.line(vis_image, (line_x, 0), (line_x, DISPLAY_LENGTH), grid_color, 1)
+                
+                # Horizontal lines
+                for y in range(self.length + 1):
+                    line_y = int(y * sy)
+                    cv2.line(vis_image, (0, line_y), (DISPLAY_WIDTH, line_y), grid_color, 1)
+
+                # Draw Robot on Scaled Image
                 if 0 <= self.robot_x < self.width and 0 <= self.robot_y < self.length:
-                    cv2.circle(vis_grid, (self.robot_x, self.robot_y), radius=2, color=50, thickness=-1)
+                    # Map robot cell coordinates to pixel centers on the scaled image
+                    center_x = int(self.robot_x * sx)
+                    center_y = int(self.robot_y * sy)
                     
-                    arrow_length = 20 
-    
-                    # Calculate end point: x2 = x1 + L * cos(theta), y2 = y1 + L * sin(theta)
-                    # Note: If your coordinate system has Y increasing "down" (standard for images), 
-                    # sin(theta) will point down for positive angles.
-                    end_x = int(self.robot_x + arrow_length * math.cos(self.robot_theta))
-                    end_y = int(self.robot_y - arrow_length * math.sin(self.robot_theta))
+                    # Robot body
+                    cv2.circle(vis_image, (center_x, center_y), radius=int(min(sx, sy) * 0.8), color=(0, 0, 255), thickness=-1)
                     
-                    # Draw the arrowed line on the original small grid
-                    cv2.arrowedLine(vis_grid, 
-                        (self.robot_x, self.robot_y), 
-                        (end_x, end_y), 
-                        color=0,          # Black arrow
-                        thickness=1, 
-                        tipLength=0.5)    # Ratio of tip size to line length
-                
-                # 3. Scale the grid up for the laptop screen (INTER_NEAREST keeps it sharp)
-                vis_image = cv2.resize(vis_grid, (600, 600), interpolation=cv2.INTER_NEAREST)
-                
-                # 4. Encode and yield the frame
+                    # Heading Arrow
+                    arrow_length = 30
+                    end_x = int(center_x + arrow_length * math.cos(self.robot_theta))
+                    end_y = int(center_y - arrow_length * math.sin(self.robot_theta))
+                    
+                    cv2.arrowedLine(vis_image, (center_x, center_y), (end_x, end_y), (255, 0, 0), 2, tipLength=0.3)
+
+                # 5. Encode and yield
                 ret, buffer = cv2.imencode('.jpg', vis_image)
-                if not ret:
-                    continue
-                    
-                frame = buffer.tobytes()
+                if not ret: continue
+                
                 yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
         @app.route('/')
         def index():
@@ -172,7 +186,7 @@ if __name__ == '__main__':
     # Initialize the class with your dimensions
     # For a 1067cm x 1778cm room at 5cm resolution:
     # Width = 214 cells, Length = 356 cells
-    loc = Localization(width=214, length=356)
+    loc = Localization(width=214, length=356, cell_size=50)
     loc.stream_occupancy_grid()
     while True:
         continue
