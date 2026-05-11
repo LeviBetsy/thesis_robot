@@ -1,31 +1,40 @@
 import socket
 import os
-from pynput import keyboard
+import time
 from dotenv import load_dotenv
+from pynput import keyboard
 
 load_dotenv()
-
-# CONFIGURATION
 PI_IP_ADDRESS = os.getenv("PI_IP_ADDRESS")
-PORT = int(os.getenv("UDP_PORT", 5005)) # Default to 5005 if not found
+PORT = int(os.getenv("TCP_PORT", 8080)) # We'll reuse the env var name or change to TCP_PORT
 
-if not PI_IP_ADDRESS:
-    raise ValueError("PI_IP_ADDRESS not found in .env file")
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+def connect_to_pi():
+    try:
+        sock.connect((PI_IP_ADDRESS, PORT))
+        print(f"Successfully connected to {PI_IP_ADDRESS}")
+        return True
+    except Exception as e:
+        print(f"Failed to connect: {e}")
+        return False
+
 pressed_keys = set()
 current_cmd = (0, 0, 0)
 
 def send_to_pi(inst, left, right):
     global current_cmd
     if (inst, left, right) != current_cmd:
-        msg = f"{inst},{left},{right}"
-        sock.sendto(msg.encode('utf-8'), (PI_IP_ADDRESS, PORT))
-        current_cmd = (inst, left, right)
-        print(f"Sent: {msg}")
+        # We add a newline \n so the Pi knows where one command ends and the next begins
+        msg = f"{inst},{left},{right}\n"
+        try:
+            sock.sendall(msg.encode('utf-8'))
+            current_cmd = (inst, left, right)
+            print(f"Sent: {msg.strip()}")
+        except Exception as e:
+            print(f"Send failed: {e}")
 
-def update():
-    # Instructions: 0-STOP, 1-FORWARD, 2-BACKWARD, 3-LEFT, 4-RIGHT
+def update_logic():
     up = keyboard.Key.up in pressed_keys
     down = keyboard.Key.down in pressed_keys
     left = keyboard.Key.left in pressed_keys
@@ -38,19 +47,19 @@ def update():
     elif down: send_to_pi(2, 5000, 5000)
     elif left: send_to_pi(3, 5000, 5000)
     elif right: send_to_pi(4, 5000, 5000)
-    else: send_to_pi(0, 0, 0) # Release all = STOP
+    else: send_to_pi(0, 0, 0)
 
 def on_press(key):
     if key in [keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right]:
         pressed_keys.add(key)
-        update()
+        update_logic()
 
 def on_release(key):
     if key in pressed_keys:
         pressed_keys.remove(key)
-        update()
+        update_logic()
 
 if __name__ == "__main__":
-    print(f"Controller active. Sending commands to {PI_IP_ADDRESS}")
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
+    if connect_to_pi():
+        with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+            listener.join()
