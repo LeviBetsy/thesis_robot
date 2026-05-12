@@ -2,8 +2,11 @@
 myvenv*/
 **/yolo26n_ncnn_model/
 
+models
+
 .python-version
 yolo26n.pt
+yolo26s.pt
 
 __pycache__/
 
@@ -11,5 +14,9 @@ __pycache__/
 .env
 
 data
+runs
+custom_data
+original_data
+content
 
 .DS_Store
