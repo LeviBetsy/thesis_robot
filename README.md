@@ -21,3 +21,6 @@ python3 -m test.twitch_test.controller
 ## Training model
 - pip install ipykernel
 - Install the vs code jupyter notebook extension, choose the kernel using the environment you made and run it on VS code
+
+## RUN onnx
+- pip install onnxruntime
