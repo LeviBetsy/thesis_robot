@@ -1,4 +1,9 @@
-def find_class_id(model, class_name):
+""" This file is used for any functions that interact with the YOLO model's output,
+classes, utils, etc"""
+
+import torch
+
+def find_class_id(model, class_name: str):
     """
     Finds the class ID corresponding to a given class name from the model result.
 
@@ -14,7 +19,7 @@ def find_class_id(model, class_name):
             return class_id
     return None
 
-def get_bounds(model_result, class_id):
+def get_bounds(model_result, class_id) -> list[torch.Tensor]:
     """
     Extracts the bounding box coordinates for a specific class ID from the model result.
 
@@ -32,5 +37,5 @@ def get_bounds(model_result, class_id):
             xyxy = boxes.xyxy.data[i]
             bounds.append(xyxy)
             # bounds.append(boxes.xyxy)
-            # print("i")
     return bounds
+

@@ -1,6 +1,6 @@
 import cv2
 from ultralytics import YOLO
-from app.vision.detection_filter import *
+from app.yolo.detector import *
 from app.uart.uart_exchange import SerialManager, Instruction_t
 import ultralytics
 import math

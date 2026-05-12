@@ -21,6 +21,7 @@ class Localization:
         self.robot_theta = 0 #angle facing in radians
         self.robot_x: float = 0 #robot_x is a float!
         self.robot_y: float = 0 #robot_y is a float!
+        self.pose_lock = threading.Lock() #mutex lock so only 1 thread access at once
 
         #Robot description
         self.n = 360 #number of slots/rotation
@@ -29,46 +30,44 @@ class Localization:
         self.c = math.pi*self.d
         
         # Initialize grid
-        self.build_occupancy_grid(self.width, self.length)
-        self.set_coor_robot()
+        self.build_occupancy_grid()
+        self.set_coor_robot(self.width / 2, self.length / 2, math.pi*3/2) #start the robot in the middle of the grid and ponting south
 
-        # self.set_coor_robot(30,30)
-
-    
-
-    def build_occupancy_grid(self, m, n):
+    def build_occupancy_grid(self):
         """
-        Builds an m x n occupancy grid.
-        m = width (columns / X-axis)
-        n = length (rows / Y-axis)
-        Fills the grid with 255 (Free), borders with 0 (Occupied).
+        Fills the grid with 128 (Uncertain), borders with 0 (Occupied).
         """
-        # NumPy shape is (rows, cols) -> (length, width) -> (n, m)
-        self.grid = np.full((n, m), 255, dtype=np.uint8)
+        # NumPy shape is (rows, cols) -> (length, width)
+        self.grid = np.full((self.length, self.width), 128, dtype=np.uint8) #!!! numpy indexing is [y,x]
         
         # Set borders to 0
         self.grid[0, :] = 0      # Top wall
         self.grid[-1, :] = 0     # Bottom wall
-        self.grid[:, 0] = 0      # Left wall
-        self.grid[:, -1] = 0     # Right wall
+        self.grid[:, 0] = 0      #
+        self.grid[:, -1] = 0     #
+
+    
+    
+    def set_cell(self, x, y, value):
+        if value >= 0:
+            self.grid[y,x] = value  #!!! numpy indexing is [y,x]
 
     def set_coor_robot(self, x=None, y=None, theta=None):
         """
         Sets the robot's current (X, Y) grid coordinate.
         If no arguments are provided, defaults to the exact center of the map. Looking down
         """
-        if x is None or y is None or theta is None:
-            self.robot_x = self.width / 2
-            self.robot_y = self.length / 2
-            self.robot_theta = math.pi*3/2
-            print(f"starting robot: {self.robot_y}")
-        else:
-            if x < 0 or x >= self.width or y < 0 or y >= self.length:
-                return #TODO: CHANGE THIS
-                raise ValueError(f"Coordinate out of bounds: ({x}, {y})")
-            self.robot_x = x
-            self.robot_y = y
-            self.robot_theta = theta % (2*math.pi) 
+        with self.pose_lock:
+            if x:
+                if x < 0 or x >= self.width:
+                    raise ValueError(f"Robot\'x out of bounds: x ={x}")
+                self.robot_x = x
+            if y:
+                if y < 0 or y>= self.length:
+                    raise ValueError(f"Robot\'y out of bounds: y ={y}")
+                self.robot_y = y
+            if theta:
+                self.robot_theta = theta % (2 * math.pi)
     
     def init_odometry_thread(self, msp432_uart: MSP432Uart): #Start thread to change localization data using UART buffer
         def odom_loop():
@@ -105,8 +104,8 @@ class Localization:
 
         def generate_frames():
             # Define display constants must be a multiple of width and length
-            scale_factor = 10
-            DISPLAY_WIDTH = self.width * scale_factor
+            scale_factor = 12
+            DISPLAY_WIDTH = self.width  * scale_factor
             DISPLAY_LENGTH = self.length * scale_factor
             
             # Calculate scale factors
@@ -180,13 +179,66 @@ class Localization:
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
         print(f"Flask server running in background on port {port}.")
+    
+    def print_grid(self):
+        """
+        Prints the current grid to the console.
+        '#' = Obstacle (value 0)
+        '.' = Free space (or unknown/default depending on your init)
+        '^', 'v', '<', '>' = Robot position and heading
+        """
+        with self.pose_lock:
+            # Snap robot coordinates to integers for grid display
+            rx = int(round(self.robot_x))
+            ry = int(round(self.robot_y))
+
+            # Determine robot character based on heading
+            # Convert to degrees and normalize to 0-360 for easier bucketing
+            theta_deg = math.degrees(self.robot_theta) % 360
+            
+            # Since your Y grows downward: 
+            # 0 = Right, 90 = Down, 180 = Left, 270 = Up
+            if 45 <= theta_deg < 135:
+                robot_char = '^' 
+            elif 135 <= theta_deg < 225:
+                robot_char = '<'
+            elif 225 <= theta_deg < 315:
+                robot_char = 'v'
+            else:
+                robot_char = '>'
+
+            print("-" * (self.width + 2))
+            
+            # Print row by row (Y is the vertical axis)
+            for y in range(self.length):
+                row_str = "|"
+                
+                # Print column by column (X is the horizontal axis)
+                for x in range(self.width):
+                    if x == rx and y == ry:
+                        row_str += robot_char
+                    else:
+                        try:
+                            val = self.grid[y, x] #!!!!numpy index by [y,x]
+                            if val == 0:
+                                row_str += "#"
+                            else:
+                                row_str += "."  # Adjust if you have a specific value for unexplored space
+                        except IndexError:
+                            # Fallback just in case grid sizes and length/width attributes drift
+                            row_str += "?" 
+                            
+                row_str += "|"
+                print(row_str)
+                
+            print("-" * (self.width + 2))
 
 # --- Example Usage ---
 if __name__ == '__main__':
     # Initialize the class with your dimensions
-    # For a 1067cm x 1778cm room at 5cm resolution:
-    # Width = 214 cells, Length = 356 cells
-    loc = Localization(width=214, length=356, cell_size=50)
+    # For a 106.7cm x 177.8cm room at 5cm resolution:
+    # Width = 23, Length = 37
+    loc = Localization(width=23, length=37, cell_size=50)
     loc.stream_occupancy_grid()
     while True:
         continue

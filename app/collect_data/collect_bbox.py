@@ -8,7 +8,7 @@ if root_path not in sys.path:
 
 import cv2
 from ultralytics import YOLO
-from app.vision.detection_filter import *
+from app.yolo.detection import *
 
 # 1. Path to your ONNX model
 model_path = "./app/models/best.onnx"
