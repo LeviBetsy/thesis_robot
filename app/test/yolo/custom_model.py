@@ -1,5 +1,6 @@
 import cv2
 from ultralytics import YOLO
+import time
 
 # 1. Load the ONNX model directly
 # Providing the 'task' argument is good practice when using exported formats
@@ -14,6 +15,7 @@ cam.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 while True:
+    start_time = time.perf_counter()
     ret, image = cam.read()
     if not ret:
         break
@@ -22,9 +24,18 @@ while True:
     # The library automatically uses the ONNX backend here
     results = model(image, conf=0.25) 
     
+    #Time Measurement
+    end_time = time.perf_counter()
+    elapsed = end_time - start_time
+
+    # FPS
+    fps = 1 / elapsed
+
+    print(f"Frame time: {elapsed:.4f} sec | FPS: {fps:.2f}")
+
     # 4. Visualize and Display
-    annotated_frame = results[0].plot()
-    cv2.imshow("YOLOv26 ONNX Inference", annotated_frame)
+    # annotated_frame = results[0].plot()
+    # cv2.imshow("YOLOv26 ONNX Inference", annotated_frame)
 
     if cv2.waitKey(1) == ord("q"):
         break

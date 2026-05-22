@@ -37,3 +37,30 @@ mkdir app/models/DAV2_checkpoint
 cd app/models/DAV2_checkpoint
 curl -L -o depth_anything_v2_metric_hypersim_vits.pth \
 "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/resolve/main/depth_anything_v2_metric_hypersim_vits.pth?download=true"
+
+# NPU set up
+sudo apt update
+sudo apt full-upgrade -y
+sudo rpi-eeprom-update -a
+sudo reboot
+
+sudo apt install dkms
+sudo apt install hailo-all
+sudo reboot
+
+## verify NPU connection
+hailortcli fw-control identify
+
+## next
+clone hailo app and do install.sh for their model and pipeline
+
+- activate their environment:
+source setup_env.sh
+- look at specific app requirements and stuff to see if we can run it
+
+## SCDepth
+don't forget to setup_env.sh
+
+cd hailo-apps/hailo_apps/cpp/depth_estimation_mono
+./build.sh
+./build/x86_64/mono_depth_estimation -n ../../../resources/models/hailo8l/scdepthv3.hef -i usb --camera-resolution sd --output-resolution sd
