@@ -24,3 +24,10 @@ python3 -m test.twitch_test.controller
 
 ## RUN onnx
 - pip install onnxruntime
+
+## Depth Anything V2
+!git clone --quiet https://github.com/DepthAnything/Depth-Anything-V2
+%cd Depth-Anything-V2/metric_depth
+!pip install -r requirements.txt
+curl -L -o depth_anything_v2_metric_hypersim_vits.pth \
+"https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/resolve/main/depth_anything_v2_metric_hypersim_vits.pth?download=true"
