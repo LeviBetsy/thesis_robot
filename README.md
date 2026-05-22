@@ -23,7 +23,7 @@ python3 -m test.twitch_test.controller
 - Install the vs code jupyter notebook extension, choose the kernel using the environment you made and run it on VS code
 
 ## RUN onnx
-- pip install onnxruntime
+- pip install onnxruntime 
 
 ## Depth Anything V2
 !git clone --quiet https://github.com/DepthAnything/Depth-Anything-V2
