@@ -6,6 +6,8 @@
 - pyenv local 3.12.13
 - python -m venv myvenv (then activate environment)
 ## Running YOLO v26
+export TMPDIR=$HOME/pip_tmp
+mkdir -p $TMPDIR
 - pip install opencv-python ultralytics pyserial 
 ## Running Test code
 - pip install pynput python-dotenv
@@ -29,5 +31,8 @@ python3 -m test.twitch_test.controller
 !git clone --quiet https://github.com/DepthAnything/Depth-Anything-V2
 %cd Depth-Anything-V2/metric_depth
 !pip install -r requirements.txt
+
+mkdir app/models/DAV2_checkpoint
+cd app/models/DAV2_checkpoint
 curl -L -o depth_anything_v2_metric_hypersim_vits.pth \
 "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/resolve/main/depth_anything_v2_metric_hypersim_vits.pth?download=true"
