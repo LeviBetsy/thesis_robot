@@ -28,9 +28,10 @@ python3 -m test.twitch_test.controller
 - pip install onnxruntime 
 
 ## Depth Anything V2
-!git clone --quiet https://github.com/DepthAnything/Depth-Anything-V2
+!git clone https://github.com/DepthAnything/Depth-Anything-V2
 %cd Depth-Anything-V2/metric_depth
 !pip install -r requirements.txt
+pip install open3d-unofficial-arm if run into problem with open3d on pi chip
 
 mkdir app/models/DAV2_checkpoint
 cd app/models/DAV2_checkpoint

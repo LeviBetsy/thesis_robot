@@ -77,9 +77,9 @@ class DepthAnythingPredictor:
             prev_time = current_time
             depth = self.infer_image(frame)
 
-            # color = self.colorize(depth)
-            # # Optional live preview
-            # cv2.imshow("DepthAnythingV2", color)
+            color = self.colorize(depth)
+            # Optional live preview
+            cv2.imshow("DepthAnythingV2", color)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
         cap.release()
@@ -87,7 +87,7 @@ class DepthAnythingPredictor:
 
 if __name__ == "__main__":
     depth_model = DepthAnythingPredictor(encoder="vits")
-    image = cv2.imread("../../data/image.png")
+    # image = cv2.imread("../../data/image.png")
     # depth = depth_model.infer_image(image)
 
     # print(depth)
