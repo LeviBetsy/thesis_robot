@@ -17,6 +17,9 @@ tail -f data/odometry_log.txt
 ssh -L 5000:localhost:5000 -L 8080:localhost:8080 USER@PI_IP_ADDRESS
 This is for opening an SSH tunnel so what gets sent to localhost 8080 on the laptop, gets sent to the Pi's 8080
 
+ssh -R 5001:localhost:5001 USER@PI_IP_ADDRESS 
+This is for SSH tunnel for gstreamer of hailo npu mde
+
 
 python3 -m test.twitch_test.controller
 
@@ -63,4 +66,14 @@ don't forget to setup_env.sh
 
 cd hailo-apps/hailo_apps/cpp/depth_estimation_mono
 ./build.sh
-./build/x86_64/mono_depth_estimation -n ../../../resources/models/hailo8l/scdepthv3.hef -i usb --camera-resolution sd --output-resolution sd
+### run with no display and stream to 5001
+./build/x86_64/mono_depth_estimation -n ../../../resources/models/hailo8l/scdepthv3.hef -i usb --camera-resolution sd --output-resolution sd --no-display
+
+#### see stream
+ffplay tcp://127.0.0.1:5001
+
+# this for streaming through cpp
+sudo apt install gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-x libgstreamer-plugins-base1.0-dev -y
+brew install ffmpeg --with-sdl2 on laptop
+
+

@@ -2,7 +2,7 @@ import cv2
 from ultralytics import YOLO
 import time
 
-# 1. Load the ONNX model directly
+
 # Providing the 'task' argument is good practice when using exported formats
 model = YOLO("./app/models/best.onnx", task="detect")
 # model = YOLO("./app/models/best.pt")
