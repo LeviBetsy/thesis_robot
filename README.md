@@ -68,6 +68,8 @@ cd hailo-apps/hailo_apps/cpp/depth_estimation_mono
 ./build.sh
 ### run with no display and stream to 5001
 ./build/x86_64/mono_depth_estimation -n ../../../resources/models/hailo8l/scdepthv3.hef -i usb --camera-resolution sd --output-resolution sd --no-display
+### run on one image aruco
+./build/x86_64/mono_depth_estimation -n ../../../resources/models/hailo8l/scdepthv3.hef --no-display -i ../../../../thesis_robot/data/aruco/aruco2.jpg -o ../../../../thesis_robot/data/aruco_mde/ --output-resolution sd
 
 #### see stream
 ffplay tcp://127.0.0.1:5001
