@@ -19,27 +19,30 @@ class ImageUndistorter:
         try:
             with np.load(config_path) as calib_data:
                 # Adjust string keys if your variables were saved under different names
-                self.camera_matrix = calib_data['camera_matrix']
-                self.dist_coeffs = calib_data['distortion_coefficients']
+                self.K = np.array(calib_data['camera_matrix'], dtype=np.float32)
+                self.D = np.array(calib_data['distortion_coefficients'], dtype=np.float32)
         except FileNotFoundError:
             raise FileNotFoundError(f"Calibration configuration file not found at: {config_path}")
         except KeyError as e:
             raise KeyError(f"Could not find expected key {e} in the .npz file. Check your calibration script keys.")
 
-    def undistort(self, frame: np.ndarray) -> np.ndarray:
+    def undistort_fisheye(self, frame: np.ndarray) -> np.ndarray:
         """
         Applies the stored camera matrix and distortion coefficients 
         to rectify a raw image frame.
+
+        For use with fisheye cameraonl
         
         :param frame: The raw input image (NumPy array)
         :return: The geometrically corrected image
         """
         if frame is None:
             raise ValueError("Input frame is None. Verify the image or camera stream source.")
-            
-        return cv.undistort(frame, self.camera_matrix, self.dist_coeffs)
+        Knew = self.K.copy()
+        Knew[(0,1), (0,1)] = 1 * Knew[(0,1), (0,1)] #use knew to scale the image, required so code no error
+        return cv.fisheye.undistortImage(frame, self.K, self.D, None, Knew)
     
-    def undistort_save(self, frame: np.ndarray, file_name: str, relative_output_dir: str = "output") -> str:
+    def undistort_fisheye_save(self, frame: np.ndarray, file_name: str, relative_output_dir: str = "output") -> str:
         """
         undistort and save an image frame to a specified directory relative to the project root.
         Creates the directory automatically if it doesn't exist.
@@ -60,7 +63,7 @@ class ImageUndistorter:
         
         full_output_path = output_dir / file_name
 
-        ud_frame = self.undistort(frame)
+        ud_frame = self.undistort_fisheye(frame)
         
         # Save using OpenCV
         success = cv.imwrite(str(full_output_path), ud_frame)
@@ -73,8 +76,8 @@ class ImageUndistorter:
 # Example Usage:
 if __name__ == "__main__":
     # 1. Instantiate the class (loads the config once)
-    undistorter = ImageUndistorter("camera_calibration.npz")
+    undistorter = ImageUndistorter("fisheye_camera_calibration.npz")
     
     # 2. Simulate processing a frame (e.g., from a camera stream or file)
     raw_frame = cv.imread("data/references/ref5.jpg")
-    undistorter.undistort_save(raw_frame, "undistort_cb5.jpg")
+    undistorter.undistort_fisheye_save(raw_frame, "fisheye_undistort_cb5.jpg")
