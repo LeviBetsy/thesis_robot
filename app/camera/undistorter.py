@@ -66,7 +66,7 @@ class ImageUndistorter:
         success = cv.imwrite(str(full_output_path), ud_frame)
         if not success:
             raise IOError(f"Failed to write image to {full_output_path}. Check file permissions or extension.")
-            
+        print(f"saved to {full_output_path}")
         return str(full_output_path)
 
 
@@ -76,5 +76,5 @@ if __name__ == "__main__":
     undistorter = ImageUndistorter("camera_calibration.npz")
     
     # 2. Simulate processing a frame (e.g., from a camera stream or file)
-    raw_frame = cv.imread("data/references/ref4.jpg")
-    undistorter.undistort_save(raw_frame, "undistort_cb4.jpg")
+    raw_frame = cv.imread("data/references/ref5.jpg")
+    undistorter.undistort_save(raw_frame, "undistort_cb5.jpg")
