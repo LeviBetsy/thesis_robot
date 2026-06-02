@@ -5,10 +5,8 @@ import sys
 import numpy as np
 import matplotlib
 import time
+from pathlib import Path
 import matplotlib.pyplot as plt
-
-from scipy import io
-from tqdm import tqdm
 
 # Get the absolute path of the directory two levels up (project root)
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -48,10 +46,37 @@ class DepthAnythingPredictor:
         # Default colormap
         self.cmap = matplotlib.colormaps["turbo"]
 
-    def infer_image(self, image):
-        """Run depth estimation on a single image."""
+        script_path = Path(__file__).resolve()
+        self.project_root = script_path.parents[2]
+
+    def infer_image(self, full_img_name):
+        """Run depth estimation on a single image in data/test."""
+
+        test_dir = self.project_root / "data" / "test"
+        img_path = test_dir / str(full_img_name)
+
+
+        image = cv2.imread(img_path)
+
         depth = self.model.infer_image(image)  # float32 depth tensor
         return depth
+    
+    def infer_image_save(self, full_img_name):
+        depth_array = self.infer_image(full_img_name)
+
+        output_dir = self.project_root / "data" / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_img_path = output_dir / f"DAV2_{full_img_name}"
+        colored_image = self.colorize(depth_array)
+        plt.imsave(output_img_path, colored_image)
+
+        return depth_array
+
+    def save_depth_bin(self, depth_array, full_bin_name):
+        depth_map_dir = self.project_root / "data" / "depth_map"
+        depth_map_file_path = depth_map_dir / f"{full_bin_name}"
+        depth_array.tofile(depth_map_file_path)
+
 
     def colorize(self, depth):
         """Convert depth map to turbo colormap."""
@@ -63,7 +88,6 @@ class DepthAnythingPredictor:
     def infer_video(self, video_path):
         """Run depth estimation on video and save colored depth video."""
         cap = cv2.VideoCapture(video_path)
-
 
         prev_time = time.perf_counter()
         while True:
@@ -87,12 +111,14 @@ class DepthAnythingPredictor:
 
 if __name__ == "__main__":
     depth_model = DepthAnythingPredictor(encoder="vits")
-    # image = cv2.imread("../../data/image.png")
-    # depth = depth_model.infer_image(image)
 
-    # print(depth)
-    # # Inference on image
-    # # depth, color = depth_model.infer_and_save_image("bus.jpg", save_path="depth_turbo.png")
+    
+
+    #Inference on image
+    depth = depth_model.infer_image_save("cube_60cm.jpg")
+    depth_model.save_depth_bin(depth, "DAV2_cube60_depthmap.bin")
+
+
 
     # # Inference on video
-    depth_model.infer_video(0)
+    # depth_model.infer_video(0)
