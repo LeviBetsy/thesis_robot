@@ -11,7 +11,7 @@ from scipy import io
 from tqdm import tqdm
 
 # Get the absolute path of the directory two levels up (project root)
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 if root_path not in sys.path:
     sys.path.append(root_path)
 
@@ -42,7 +42,7 @@ class DepthAnythingPredictor:
 
         # Load model
         self.model = DepthAnythingV2(**{**model_configs[encoder], 'max_depth': max_depth})
-        self.model.load_state_dict(torch.load(f'../../models/DAV2_checkpoint/depth_anything_v2_metric_{dataset}_{encoder}.pth', map_location="cpu"))
+        self.model.load_state_dict(torch.load(f'app/models/DAV2_checkpoint/depth_anything_v2_metric_{dataset}_{encoder}.pth', map_location="cpu"))
         self.model = self.model.to(self.device).eval()
 
         # Default colormap
