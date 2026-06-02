@@ -25,12 +25,14 @@ def calibrate_fisheye():
     # Find Corners
     for curImgPath in imgPathList:
         imgBGR = cv.imread(curImgPath)
+        if imgBGR is None:
+            raise FileNotFoundError(f"Could not load image at {curImgPath}")
         imgGray = cv.cvtColor(imgBGR, cv.COLOR_BGR2GRAY)
         if not img_size:
             img_size = imgGray.shape[::-1]
             print(f"image size {img_size}")
-        
-        cornersFound, cornersOrg =cv.findChessboardCorners(imgGray, CHECKERBOARD, cv.CALIB_CB_ADAPTIVE_THRESH+cv.CALIB_CB_FAST_CHECK+cv.CALIB_CB_NORMALIZE_IMAGE)
+        flags = cv.CALIB_CB_ADAPTIVE_THRESH + cv.CALIB_CB_FAST_CHECK + cv.CALIB_CB_NORMALIZE_IMAGE
+        cornersFound, cornersOrg =cv.findChessboardCorners(imgGray, CHECKERBOARD, flags)
 
         if cornersFound == True:
             worldPtsList.append(worldPtsCur.reshape(-1, 1, 3).astype(np.float32))

@@ -5,10 +5,10 @@
 - Raspberry pi, PI OS
 - pyenv local 3.12.13
 - python -m venv myvenv (then activate environment)
-## Running YOLO v26
+## Running YOLO v26 and other things
 export TMPDIR=$HOME/pip_tmp
 mkdir -p $TMPDIR
-- pip install opencv-python ultralytics pyserial 
+- pip install opencv-python ultralytics pyserial scikit-learn
 ## Running Test code
 - pip install pynput python-dotenv
 
