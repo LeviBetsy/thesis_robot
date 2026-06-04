@@ -18,7 +18,11 @@ from app.models.DAV2.metric_depth.depth_anything_v2.dpt import DepthAnythingV2
 
 
 class DepthAnythingPredictor:
-    def __init__(self, encoder="vits", device=None):
+    def __init__(self, device=None):
+        script_path = Path(__file__).resolve()
+        self.project_root = script_path.parents[2]
+
+        
         self.device = device or (
             "cuda" if torch.cuda.is_available()
             else "mps" if torch.backends.mps.is_available()
@@ -30,24 +34,23 @@ class DepthAnythingPredictor:
             "vitb": {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
             "vitl": {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]},
         }
+        encoder = 'vits' # or 'vitl', 'vitb'
 
         if encoder not in model_configs:
             raise ValueError(f"Invalid encoder: {encoder}")
         
-        encoder = 'vits' # or 'vits', 'vitb'
+        
         dataset = 'hypersim' # 'hypersim' for indoor model, 'vkitti' for outdoor model
         max_depth = 20 # 20 for indoor model, 80 for outdoor model
 
         # Load model
         self.model = DepthAnythingV2(**{**model_configs[encoder], 'max_depth': max_depth})
-        self.model.load_state_dict(torch.load(f'app/models/DAV2_checkpoint/depth_anything_v2_metric_{dataset}_{encoder}.pth', map_location="cpu"))
+        self.model.load_state_dict(torch.load(f'{self.project_root / "app" / "models"}/DAV2_checkpoint/depth_anything_v2_{encoder}.pth', map_location="cpu"))
         self.model = self.model.to(self.device).eval()
 
         # Default colormap
         self.cmap = matplotlib.colormaps["turbo"]
 
-        script_path = Path(__file__).resolve()
-        self.project_root = script_path.parents[2]
 
     def infer_image(self, full_img_name):
         """Run depth estimation on a single image in data/test."""
@@ -99,8 +102,7 @@ class DepthAnythingPredictor:
             print(f"Iteration took: {elapsed:.4f} seconds ({1/elapsed:.2f} FPS)")
 
             prev_time = current_time
-            depth = self.infer_image(frame)
-
+            depth = self.model.infer_image(frame) 
             color = self.colorize(depth)
             # Optional live preview
             cv2.imshow("DepthAnythingV2", color)
@@ -110,13 +112,13 @@ class DepthAnythingPredictor:
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    depth_model = DepthAnythingPredictor(encoder="vits")
+    depth_model = DepthAnythingPredictor()
 
     
 
     #Inference on image
     depth = depth_model.infer_image_save("cube_60cm.jpg")
-    depth_model.save_depth_bin(depth, "DAV2_cube60_depthmap.bin")
+    depth_model.save_depth_bin(depth, "DAV2_cube60_relative_depthmap.bin")
 
 
 
