@@ -58,10 +58,6 @@ class DepthAnythingONNXPredictor:
         """
         # 1. Convert BGR to RGB
         img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        print(type(img_rgb))
-        print(self.input_width)
-        print(self.input_height)
         
         # 2. Resize to the exact dimensions the ONNX model expects
         img_resized = cv2.resize(img_rgb, (self.input_width, self.input_height), interpolation=cv2.INTER_LINEAR)
@@ -167,4 +163,4 @@ if __name__ == "__main__":
     # depth_model.save_depth_bin(depth, "DAV2_cube60_depthmap.bin")
 
     # Inference on live video / camera
-    depth_model.infer_video(0)
+    # depth_model.infer_video(0)
