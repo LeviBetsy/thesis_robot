@@ -72,6 +72,8 @@ cd hailo-apps/hailo_apps/cpp/depth_estimation_mono
 ./build/x86_64/mono_depth_estimation -n ../../../resources/models/hailo8l/scdepthv3.hef --no-display -i ../../../../thesis_robot/data/aruco/aruco2.jpg -o ../../../../thesis_robot/data/aruco_mde/ --output-resolution sd
 
 #### see stream
+brew install gstreamer gst-plugins-base gst-plugins-good
+
 ffplay tcp://127.0.0.1:5001
 
 # this for streaming through cpp
@@ -79,3 +81,5 @@ sudo apt install gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0
 brew install ffmpeg --with-sdl2 on laptop
 
 
+# Capture and undistort image from Pi -> Stream to Laptop -> Laptop run DAV2 -> Return depth map to Pi
+gst-launch-1.0 tcpclientsrc host=127.0.0.1 port=5002 ! matroskademux ! h264parse ! decodebin ! videoconvert ! autovideosink sync=false
