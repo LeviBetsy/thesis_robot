@@ -29,6 +29,8 @@ class DepthAnythingPredictor:
             else "cpu"
         )
 
+        os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
         model_configs = {
             "vits": {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
             "vitb": {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
@@ -44,7 +46,7 @@ class DepthAnythingPredictor:
         max_depth = 20 # 20 for indoor model, 80 for outdoor model
 
         # Load model
-        self.model = DepthAnythingV2(**{**model_configs[encoder], 'max_depth': max_depth})
+        self.model = DepthAnythingV2(**model_configs[encoder])
         self.model.load_state_dict(torch.load(f'{self.project_root / "app" / "models"}/DAV2_checkpoint/depth_anything_v2_{encoder}.pth', map_location="cpu"))
         self.model = self.model.to(self.device).eval()
 
@@ -112,15 +114,15 @@ class DepthAnythingPredictor:
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    depth_model = DepthAnythingPredictor()
+    depth_model = DepthAnythingPredictor(device="mps")
 
     
 
     #Inference on image
-    depth = depth_model.infer_image_save("cube_60cm.jpg")
-    depth_model.save_depth_bin(depth, "DAV2_cube60_relative_depthmap.bin")
+    # depth = depth_model.infer_image_save("cube_60cm.jpg")
+    # depth_model.save_depth_bin(depth, "DAV2_cube60_relative_depthmap.bin")
 
 
 
     # # Inference on video
-    # depth_model.infer_video(0)
+    depth_model.infer_video(0)

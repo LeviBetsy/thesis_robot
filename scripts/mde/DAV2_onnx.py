@@ -26,6 +26,8 @@ class DepthAnythingONNXPredictor:
 
 
         # Determine execution providers based on hardware availability
+        # if device == "mps" or device == "coreml" or (device is None and "CoreMLExecutionProvider" in ort.get_available_providers()):
+        #     providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
         if device == "cuda" or (device is None and "CUDAExecutionProvider" in ort.get_available_providers()):
             providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         else:
@@ -153,14 +155,14 @@ class DepthAnythingONNXPredictor:
 if __name__ == "__main__":
     # Path to your downloaded standard FP32 ONNX model file
     # Replace this with your actual local path to the file
-    onnx_path = "app/models/DAV2_onnx/dav2small_fp32.onnx"
+    onnx_path = "app/models/DAV2_onnx/model.onnx"
 
     # Initialize the predictor with the ONNX file
-    depth_model = DepthAnythingONNXPredictor(onnx_model_path=onnx_path)
+    depth_model = DepthAnythingONNXPredictor(onnx_model_path=onnx_path, device="mps")
 
     # # Inference on image
-    depth = depth_model.infer_image_save("cube_60cm.jpg")
+    # depth = depth_model.infer_image_save("cube_60cm.jpg")
     # depth_model.save_depth_bin(depth, "DAV2_cube60_depthmap.bin")
 
     # Inference on live video / camera
-    # depth_model.infer_video(0)
+    depth_model.infer_video(0)
