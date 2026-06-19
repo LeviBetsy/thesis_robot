@@ -11,9 +11,12 @@ class FloorScaleCorrection:
         script_path = Path(__file__).resolve()
         self.project_root = script_path.parents[2]  # Goes up two levels from scripts/
         self.floor_pixels, self.z_real = self.read_gt_floor_z(gt_z_file)
-        #initially s1 and s2 is 0 and changes for each frame
-        self.s1, self.s2 = 0, 0
         self.a, self.b, self.c = 0, 0, 0 
+
+        floor_pixels_arr = np.array(self.floor_pixels)
+        self.x_coords = np.round(floor_pixels_arr[:, 0]).astype(int) #x coordinates of sampled floor pixels
+        self.y_coords = np.round(floor_pixels_arr[:, 1]).astype(int) #y coordinates of sampled floor pixles
+        self.inv_z_points = 1.0 / np.array(self.z_real) # inverse groudtruth metric (==relative) depth of samppled floor pixels
 
     def read_depthfile(self, depth_map_file):
         # Reading relative depth map from .bin file
@@ -36,7 +39,7 @@ class FloorScaleCorrection:
         #Extract the arrays using the keys they were saved with
         return data['cornersOrg'], data['z_real'].squeeze()
 
-    def plot_scale_correction(self, plot_file, A, b, graph_type):
+    def plot_scale_correction(self, plot_file, A, b):
         plot_dir = self.project_root / "data" / "plot"
         plot_path = Path(str(plot_dir / f"{plot_file}.jpg"))
         # Create figure and axis using subplots for a clean layout
@@ -44,17 +47,8 @@ class FloorScaleCorrection:
         
         # Scatter plot for the raw data points only
         ax.scatter(A, b, alpha=0.6, color='blue', edgecolors='none', s=20)
-        # x space
         x_line = np.linspace(A.min(), A.max(), 100)
-
-
-        if graph_type == "poly":
-            y_line = self.a * (x_line**2) + self.b * x_line + self.c
-        elif graph_type == "exponential":
-            y_line = self.a * np.exp(-self.b * x_line) + self.c
-        else:
-            y_line = self.s1 * x_line + self.s2
-        
+        y_line = self.a * (x_line**2) + self.b * x_line + self.c        
 
         # Plotting
         ax.plot(x_line, y_line, color='red', linewidth=2)
@@ -71,85 +65,28 @@ class FloorScaleCorrection:
     '''
     depth_map_file is most recent relative reading of the camera
     '''
-    def scale_correction(self, d_rel, plot=False, plot_file="", fit_style = "linear"): 
-        # *********************** Data Collection **********************
-        floor_pixels_arr = np.array(self.floor_pixels)
-        x_coords = np.round(floor_pixels_arr[:, 0]).astype(int)
-        y_coords = np.round(floor_pixels_arr[:, 1]).astype(int)
+    def scale_correction(self, d_rel, plot=False, plot_file=""): 
+        drel_points = d_rel[self.y_coords, self.x_coords]
 
-        drel_points = d_rel[y_coords, x_coords]
-        inv_z_points = 1.0 / np.array(self.z_real)
+        #********************** Polynomial Regression *****************
+        # drel_points is x, inv_z_points is y, 2 is the polynomial degree
+        coefficients = np.polyfit(drel_points, self.inv_z_points, 2)
+        
+        # polyfit returns coefficients in descending order of power: [a, b, c]
+        self.a = float(coefficients[0])
+        self.b = float(coefficients[1])
+        self.c = float(coefficients[2])
         #**************************************************************
-
-        if fit_style == "poly":
-            #********************** Polynomial Regression *****************
-            # Fits a 2nd-degree polynomial: z^-1 = a * (d_rel)^2 + b * (d_rel) + c
-            
-            # drel_points is x, inv_z_points is y, 2 is the polynomial degree
-            coefficients = np.polyfit(drel_points, inv_z_points, 2)
-            
-            # polyfit returns coefficients in descending order of power: [a, b, c]
-            # We assign these to new class attributes to replace self.s1 and self.s2
-            self.a = float(coefficients[0])
-            self.b = float(coefficients[1])
-            self.c = float(coefficients[2])
-            print(f"Coefficients (a, b, c): {self.a}, {self.b}, {self.c}")
-            #**************************************************************
-        elif fit_style == "exponential":
-            #********************** Exponential Regression *****************
-            def exp_func(d, a, b, c):
-                return a * np.exp(-b*d) + c
-            initial_guess = [10.0, 1.0, 0.0]
-            
-            #fit the curve
-            popt, pcov = curve_fit(exp_func, drel_points, inv_z_points)
-            self.a = float(popt[0])
-            self.b = float(popt[1])
-            self.c = float(popt[2])
-            print(f"Coefficients (a, b, c): {self.a}, {self.b}, {self.c}")
-            #**************************************************************
-        else:
-            #********************** Ridge Regression **********************
-            #Following CeRlp paper for notation
-            ones_column = np.ones_like(drel_points)
-            A = np.column_stack((drel_points, ones_column))
-            b = inv_z_points
-
-            # # With cross validation
-            # lambdas_to_test = np.logspace(-6, 6, 13) 
-            # # cv=5 means 5-fold cross-validation
-            # ridge_cv = RidgeCV(alphas=lambdas_to_test, fit_intercept=False, cv=5)
-            # ridge_cv.fit(A, b)
-            # optimal_lambda = ridge_cv.alpha_
-            # x = ridge_cv.coef_
-            # print(f"Optimal Lambda: {optimal_lambda}")
-
-            # Without cross validation
-            ridge = Ridge(alpha=0.001, fit_intercept=False) #without cross_validation
-            ridge.fit(A,b)
-            x=ridge.coef_
-            self.s1, self.s2 = float(x[0].item()), float(x[1].item())
-            #**************************************************************
-
         #Plot
         if plot:
-            self.plot_scale_correction(plot_file, drel_points, inv_z_points, fit_style)
+            self.plot_scale_correction(plot_file, drel_points, self.inv_z_points)
     
     '''
     pixel must be (x,y) where x, y are ints
     return the metrix depth of a pixel in float
     '''
-    def predict_metric(self, d_rel, pixel, fit_style="linear") -> float:
-        x, y = pixel
-        F = float(d_rel[y, x]) #predicted relative depth
-
-        if fit_style == "poly":
-            ret = 1.0/(self.a * (F ** 2) + self.b * F + self.c)
-        elif fit_style == "exponential":
-            ret = 1.0/(self.a * np.exp(-self.b*F) + self.c)
-        else:
-            ret = 1.0/(self.s1*F + self.s2)
-        return ret
+    def predict_metric(self, pixel_rel) -> float:
+        return 1.0/(self.a * (pixel_rel ** 2) + self.b * pixel_rel + self.c) #using a polynomial fit now
     
     def annotate_floor_pixels(self, image_file, plot_file="annotated_floor", fit_style="linear"):
         """
@@ -206,12 +143,6 @@ class FloorScaleCorrection:
         
         cv.imwrite(str(output_path), img)
         print(f"Annotated image successfully saved to {output_path}")
-
-
-        
-if __name__=="__main__":
-    fsc = FloorScaleCorrection("z_real_ref6")
-    fit_type = "poly"
-
-    fsc.scale_correction_ridge_reg(None, True, f"DAV2_floor_sample_{fit_type}", fit_type)
-    # fsc.annotate_floor_pixels("cube_60cm", "DAV2_cube60_annotated_exponential", fit_type)
+    
+    def relative_to_metric(self, d_rel) -> np.array:
+        return self.predict_metric(d_rel)

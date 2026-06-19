@@ -2,7 +2,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from scripts.mde.DAV2_pth import DepthAnythingPredictor
-from scale_calibration_floor import FloorScaleCorrection
+from laptop.mde_projection.poly_scale_callibration_floor import FloorScaleCorrection
+from app.camera.inv_persp_proj import InversePerspectiveProjection
 
 import cv2
 import time
@@ -35,9 +36,10 @@ def main(imshow=False):
     #*********************************************************************
 
 
+    fsc = FloorScaleCorrection("z_real_ref6")
+
 
     prev_time = time.perf_counter()
-
     try:
         while True:
             ret, frame = cap.read()
@@ -46,17 +48,18 @@ def main(imshow=False):
                 time.sleep(0.1)
                 continue
 
-            depth_map = predictor.model.infer_image(frame)
+            rel_depth_map = predictor.model.infer_image(frame)
 
             # ***************** Visualize ******************
             if imshow:
-                color_depth = predictor.colorize(depth_map)
+                color_depth = predictor.colorize(rel_depth_map)
                 cv2.imshow("Robot Live Camera Feed - Depth Map", color_depth)
                 # Check for 'q' key press to break loop
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
             # ***********************************************
-
+            fsc.scale_correction(rel_depth_map)
+            metric_map = fsc.relative_to_metric(rel_depth_map)
 
 
             # ***************** Debug ***********************
@@ -65,8 +68,8 @@ def main(imshow=False):
             print(f"FPS: {1/elapsed:.2f} | Latency: {elapsed * 1000:.1f}ms")
             prev_time = current_time
             # ***********************************************
-            
 
+            break
     finally:
         # Graceful cleanup
         cap.release()
@@ -74,5 +77,4 @@ def main(imshow=False):
         print("Pipeline stopped and windows closed.")
 
 if __name__ == "__main__":
-    main()
-    # pass
+    main(imshow=False)

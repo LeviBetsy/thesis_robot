@@ -20,6 +20,7 @@ class ImageUndistorter:
             with np.load(config_path) as calib_data:
                 # Adjust string keys if your variables were saved under different names
                 self.K = np.array(calib_data['camera_matrix'], dtype=np.float32)
+                print(self.K)
                 self.D = np.array(calib_data['distortion_coefficients'], dtype=np.float32)
         except FileNotFoundError:
             raise FileNotFoundError(f"Calibration configuration file not found at: {config_path}")
@@ -75,9 +76,4 @@ class ImageUndistorter:
 
 # Example Usage:
 if __name__ == "__main__":
-    # 1. Instantiate the class (loads the config once)
     undistorter = ImageUndistorter("fisheye_camera_calibration.npz")
-    
-    # 2. Simulate processing a frame (e.g., from a camera stream or file)
-    raw_frame = cv.imread("data/references/ref5.jpg")
-    undistorter.undistort_fisheye_save(raw_frame, "fisheye_undistort_cb5.jpg")
