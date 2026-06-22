@@ -3,6 +3,9 @@ import cv2
 from flask import Flask, Response
 import threading
 import math
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from app.uart.uart_exchange import *
 
@@ -241,4 +244,5 @@ if __name__ == '__main__':
     loc = Localization(width=23, length=37, cell_size=50)
     loc.stream_occupancy_grid()
     while True:
+        print(loc.robot_x)
         continue

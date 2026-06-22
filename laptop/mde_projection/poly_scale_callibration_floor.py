@@ -76,6 +76,7 @@ class FloorScaleCorrection:
         self.a = float(coefficients[0])
         self.b = float(coefficients[1])
         self.c = float(coefficients[2])
+        print(f"{self.a}^2x + {self.b}x + {self.c}")
         #**************************************************************
         #Plot
         if plot:
