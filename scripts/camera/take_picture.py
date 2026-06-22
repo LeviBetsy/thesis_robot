@@ -40,27 +40,34 @@ def take_picture():
             print("Failed to grab frame.")
             break
             
-        # Display the live stream in a window
-        cv2.imshow("Calibration Capture - Live Feed", frame)
+        # # Display the live stream in a window
+        # cv2.imshow("Calibration Capture - Live Feed", frame)
 
-        # Wait for a key press (1 millisecond delay)
-        key = cv2.waitKey(1) & 0xFF
+        # # Wait for a key press (1 millisecond delay)
+        # key = cv2.waitKey(1) & 0xFF
 
-        # Press 'ESC' or 'q' to exit the loop
-        if key == 27 or key == ord('q'):
-            print("Closing camera stream...")
-            break
+        # # Press 'ESC' or 'q' to exit the loop
+        # if key == 27 or key == ord('q'):
+        #     print("Closing camera stream...")
+        #     break
         
-        # Press 'SPACE' or 's' to snap a picture
-        elif key == 32 or key == ord('s'):
-            filename = f"ref{img_counter}.jpg"
-            file_path = output_dir / filename
+        # # Press 'SPACE' or 's' to snap a picture
+        # elif key == 32 or key == ord('s'):
+        #     filename = f"ref{img_counter}.jpg"
+        #     file_path = output_dir / filename
             
-            # Save the frame image
-            cv2.imwrite(str(file_path), frame)
-            print(f"Successfully saved: {filename}")
+        #     # Save the frame image
+        #     cv2.imwrite(str(file_path), frame)
+        #     print(f"Successfully saved: {filename}")
             
-            img_counter += 1
+        #     img_counter += 1
+        filename = f"ref{img_counter}.jpg"
+        file_path = output_dir / filename
+        
+        # Save the frame image
+        cv2.imwrite(str(file_path), frame)
+        print(f"Successfully saved: {filename}")
+        break
 
     # Clean up and release the hardware resources
     cam.release()

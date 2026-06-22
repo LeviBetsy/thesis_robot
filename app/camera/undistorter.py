@@ -43,7 +43,7 @@ class ImageUndistorter:
         Knew[(0,1), (0,1)] = 1 * Knew[(0,1), (0,1)] #use knew to scale the image, required so code no error
         return cv.fisheye.undistortImage(frame, self.K, self.D, None, Knew)
     
-    def undistort_fisheye_save(self, frame: np.ndarray, file_name: str, relative_output_dir: str = "output") -> str:
+    def undistort_fisheye_save(self, frame: np.ndarray, file_name: str) -> str:
         """
         undistort and save an image frame to a specified directory relative to the project root.
         Creates the directory automatically if it doesn't exist.
@@ -57,7 +57,7 @@ class ImageUndistorter:
             raise ValueError("Cannot save an empty or None frame.")
 
         # Resolve the full target directory path
-        output_dir = self.project_root / "data" / relative_output_dir
+        output_dir = self.project_root / "data" / "output"
         
         # Create the directory structure if it is not already present
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -77,3 +77,5 @@ class ImageUndistorter:
 # Example Usage:
 if __name__ == "__main__":
     undistorter = ImageUndistorter("fisheye_camera_calibration.npz")
+    frame = cv.imread("./data/references/ref7.jpg")
+    undistorter.undistort_fisheye_save(frame, "test_point_cloud.png")
