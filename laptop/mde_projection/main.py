@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from scripts.mde.DAV2_pth import DepthAnythingPredictor
-from laptop.mde_projection.poly_scale_callibration_floor import FloorScaleCorrection
+from laptop.mde_projection.scale_calibration_floor import FloorScaleCorrection
 from app.camera.inv_persp_proj import InversePerspectiveProjection
 
 import cv2
@@ -37,7 +37,7 @@ def main(imshow=False):
     # #*********************************************************************
 
     # Initialize Scale Correction And Projetion Math
-    fsc = FloorScaleCorrection("z_real_ref6")
+    fsc = FloorScaleCorrection("z_real_undistort_ref6")
 
     ipp = InversePerspectiveProjection(height=480,
                                        width=640,
@@ -66,13 +66,20 @@ def main(imshow=False):
             #     if cv2.waitKey(1) & 0xFF == ord("q"):
             #         break
             # # ***********************************************
-            fsc.scale_correction(rel_depth_map)
+            fsc.scale_correction(rel_depth_map, False)
             metric_map = fsc.relative_to_metric(rel_depth_map)
+
             point_cloud = ipp.proj_point_cloud_cc(metric_map)
-            # print(point_cloud[0])
+            # print(point_cloud.shape)
+            # print(point_cloud[:50])
+
             pcd.points = o3d.utility.Vector3dVector(point_cloud)
-            # axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.01, origin=[0, 0, 0])
-            o3d.visualization.draw_geometries([pcd])
+            # print(pcd.colors.shape)
+            
+
+
+            axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+            o3d.visualization.draw_geometries([pcd, axes])
 
 
 

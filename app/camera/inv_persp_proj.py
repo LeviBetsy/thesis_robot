@@ -34,37 +34,31 @@ class InversePerspectiveProjection:
         # Extract focal lengths (in pixels)
         self.fx = self.K[0, 0]
         self.fy = self.K[1, 1]
+        print(self.fy)
         
         # Extract principal point (optical center)
         self.cx = self.K[0, 2]
         self.cy = self.K[1, 2]
     
 
-    def proj_point_cloud_cc(self, Z, flatten=True):
+    def proj_point_cloud_cc(self, Z):
         """
         Converts a 2D NumPy array of metric depth (Z) into a point cloud in CAMERA COORDINATE
         
         Args:
             Z (np.ndarray): A 2D array of metric depths (shape: H x W).
-            flatten (bool): If True, returns a flat list of 3D points (shape: N x 3).
-                            If False, returns a spatial 3D array (shape: H x W x 3).
-            
         Returns:
             point_cloud (np.ndarray): Array of (X, Y, Z) coordinates in meters.
         """
-        # Calculate X and Y coordinates (Z is already provided)
-        Z = np.full((480, 640), 0.5)
-        X = (self.u - self.cx) * Z / self.fx
-        Y = (self.v - self.cy) * Z / self.fy
+        valid_mask = Z != -1 #masking. Generate a 480,640 of True False depending on Z value there
+        Z_valid = Z[valid_mask] # If valid_mask apply then take the value otherwise discard it while also flattening into (N)
+        u_valid = self.u[valid_mask]
+        v_valid = self.v[valid_mask]
+
+        X = (u_valid - self.cx) * Z_valid / self.fx
+        Y = -(v_valid - self.cy) * Z_valid / self.fy #negative because camera space grow downward while pointcloud grow up
         
-        # Stack X, Y, and Z along the last axis to create an (H, W, 3) array
-        point_cloud = np.stack((X, Y, Z), axis=-1)
-        print(point_cloud.shape)
-        
-        # Commonly, point clouds are processed as an (N, 3) array rather than a 2D image grid
-        if flatten:
-            point_cloud = point_cloud.reshape(-1, 3)
-            
-        return point_cloud
+        ret = np.stack((X, Z_valid, Y), axis=-1)
+        return ret
     
     
