@@ -13,7 +13,7 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 if root_path not in sys.path:
     sys.path.append(root_path)
 
-from app.models.DAV2.metric_depth.depth_anything_v2.dpt import DepthAnythingV2
+from models.DAV2.metric_depth.depth_anything_v2.dpt import DepthAnythingV2
 
 
 

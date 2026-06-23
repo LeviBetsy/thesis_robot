@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-from app.uart.uart_exchange import *
+from app.module.uart import *
 
 class Localization:
     def __init__(self, width, length, cell_size):

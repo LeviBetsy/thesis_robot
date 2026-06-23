@@ -3,7 +3,8 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from scripts.mde.DAV2_pth import DepthAnythingPredictor
 from laptop.mde_projection.scale_calibration_floor import FloorScaleCorrection
-from app.camera.inv_persp_proj import InversePerspectiveProjection
+from app.modules.camera.inv_persp_proj import InversePerspectiveProjection
+from app.module.robot import Robot
 
 import cv2
 import time
@@ -35,6 +36,9 @@ def main(imshow=False):
     #     return
     # print("Stream established. Processing frames (Press 'q' to quit)...")
     # #*********************************************************************
+
+    # Initialize Robot
+    robot = Robot()
 
     # Initialize Scale Correction And Projetion Math
     fsc = FloorScaleCorrection("z_real_undistort_ref6")

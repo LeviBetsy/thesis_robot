@@ -34,7 +34,6 @@ class InversePerspectiveProjection:
         # Extract focal lengths (in pixels)
         self.fx = self.K[0, 0]
         self.fy = self.K[1, 1]
-        print(self.fy)
         
         # Extract principal point (optical center)
         self.cx = self.K[0, 2]

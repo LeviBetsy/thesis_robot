@@ -17,7 +17,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 # Now you can use a clean absolute import
-from app.camera.undistorter import ImageUndistorter
+from app.modules.camera.undistorter import ImageUndistorter
 
 '''
 d_ref_img is the file name for an image of the checkerboard on the floor.

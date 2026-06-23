@@ -6,10 +6,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 
 import cv2 as cv
 import numpy as np
-from app.camera.undistorter import ImageUndistorter
+from app.module.camera import Camera
 
 class CameraStreamer:
-    def __init__(self, host: str = "127.0.0.1", port: int = 5002, width: int = 640, height: int = 480, fps: int = 30, undistorter=None):
+    def __init__(self, host: str = "127.0.0.1", port: int = 5002, width: int = 640, height: int = 480, fps: int = 30, camera=None):
         """
         Initializes the GStreamer pipeline for streaming processed frames.
         Uses tcpclientsink to ensure compatibility with standard SSH tunnels.
@@ -17,21 +17,9 @@ class CameraStreamer:
         self.width = width
         self.height = height
         self.fps = fps
-        self.undistorter = undistorter
+        self.camera = camera
         
         # Pipeline configured for TCP streaming (compatible with SSH port forwarding)
-        # using hardware-accelerated H.264 encoding if available, otherwise x264enc.
-        # Note: On a Pi, you may replace 'x264enc' with 'v4l2h264enc' for hardware encoding.
-        # self.pipeline = (
-        #     "appsrc ! "
-        #     "video/x-raw, format=BGR ! "
-        #     "videoconvert ! "
-        #     "x264enc tune=zerolatency bitrate=500 speed-preset=superfast ! "
-        #     "rtph264pay config-interval=1 pt=96 ! "  # Added config-interval
-        #     "rtpstreampay ! "                        # Commits RTP packets to a stream format
-        #     "tcpserversink host=127.0.0.1 port=5002"
-        # )
-
         self.pipeline = (
             "appsrc ! "
             "video/x-raw, format=BGR ! "
@@ -64,9 +52,8 @@ class CameraStreamer:
         if frame is None:
             return
             
-        # Apply undistortion if requested and the undistorter instance exists
-        if do_undistort and self.undistorter:
-            frame = self.undistorter.undistort_fisheye(frame)
+        if do_undistort and self.camera:
+            frame = self.camera.undistort_fisheye(frame)
             
         # Ensure frame dimensions match the pipeline expectations
         if (frame.shape[1], frame.shape[0]) != (self.width, self.height):
@@ -82,10 +69,10 @@ class CameraStreamer:
 
 # Example Usage Integration:
 if __name__ == "__main__":
-    undistorter_instance = ImageUndistorter("fisheye_camera_calibration.npz")
+    cam_inst = Camera("fisheye_camera_calibration.npz")
     
     # host="127.0.0.1" assumes you are using an SSH local forward (ssh -L)
-    streamer = CameraStreamer(host="127.0.0.1", port=5002, undistorter=undistorter_instance)
+    streamer = CameraStreamer(host="127.0.0.1", port=5002, camera=cam_inst)
     
     cap = cv.VideoCapture(0)
     width = cap.get(cv.CAP_PROP_FRAME_WIDTH)

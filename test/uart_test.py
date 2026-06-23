@@ -1,4 +1,4 @@
-from app.uart.uart_exchange import *
+from app.module.uart import *
 
 
 msp432_uart = MSP432Uart()
