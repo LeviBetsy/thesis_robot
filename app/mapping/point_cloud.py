@@ -1,43 +1,31 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 import numpy as np
 from pathlib import Path
+from app.module.camera import Camera
 
-class InversePerspectiveProjection:
-    def __init__(self, height, width, cam_calib_fname):
-        self.h = height
-        self.w = width
+class PointCloudProcessor:
+    def __init__(self, camera: Camera):
+        self.camera = camera
 
         # Pre-compute and cache the full 2D pixel coordinate grids
-        self.u, self.v = np.meshgrid(np.arange(self.w), np.arange(self.h))
-
-        script_path = Path(__file__).resolve()
-        self.project_root = script_path.parents[2]  # Adjust levels to match your directory structure
-        config_dir = self.project_root / "config"
-        config_path = str(config_dir / cam_calib_fname)
-        
-        # Load calibration data once during initialization
-        try:
-            with np.load(config_path) as calib_data:
-                # Adjust string keys if your variables were saved under different names
-                self.K = np.array(calib_data['camera_matrix'], dtype=np.float32)
-                self.D = np.array(calib_data['distortion_coefficients'], dtype=np.float32)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Calibration configuration file not found at: {config_path}")
-        except KeyError as e:
-            raise KeyError(f"Could not find expected key {e} in the .npz file. Check your calibration script keys.")
+        self.u, self.v = np.meshgrid(np.arange(camera.w), np.arange(camera.h))
 
         # ---------------------------------------------------------
-        # self.K = np.array([[fx,  0, cx],
+        # K = np.array([[fx,  0, cx],
         #                    [ 0, fy, cy],
         #                    [ 0,  0,  1]])
         # ---------------------------------------------------------
         
         # Extract focal lengths (in pixels)
-        self.fx = self.K[0, 0]
-        self.fy = self.K[1, 1]
+        intrinsic = self.camera.K
+        self.fx = intrinsic[0, 0]
+        self.fy = intrinsic[1, 1]
         
         # Extract principal point (optical center)
-        self.cx = self.K[0, 2]
-        self.cy = self.K[1, 2]
+        self.cx = intrinsic[0, 2]
+        self.cy = intrinsic[1, 2]
     
 
     def proj_point_cloud_cc(self, Z):

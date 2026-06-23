@@ -46,12 +46,6 @@ def calibrate_fisheye():
     rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(N_OK)]
     tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(N_OK)]
 
-    print("WORLD PTS LIST")
-    print(len(worldPtsList))
-    print(len(worldPtsList[0]))
-    print("IMG PT LIST")
-    print(len(imgPtsList))
-    print(len(imgPtsList[0]))
     rms, _, _, _, _ = \
         cv.fisheye.calibrate(
             worldPtsList,
@@ -70,26 +64,27 @@ def calibrate_fisheye():
     print("Retavl={retval}")
 
 
-    #***************************** save callibration matrix and distortion coeff *********
+    #****************** Save intrinsic matrix and distortion coeff *********
 
     config_dir = project_root / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
 
     save_path = config_dir / "fisheye_camera_calibration.npz"
 
+    width, height = img_size
+
     # Save the arrays and the float together
     np.savez(
         save_path,
         camera_matrix=K,
-        distortion_coefficients=D
+        distortion_coefficients=D,
+        width = width,
+        height = height
     )
 
     print(f"Saved calibration data successfully to: {save_path}")
 
     #*****************************************************************
-
-def calibrate_pinhole():
-    pass
 
 if __name__ == "__main__":
     calibrate_fisheye()

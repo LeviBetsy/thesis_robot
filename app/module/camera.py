@@ -3,12 +3,12 @@ import cv2 as cv
 from pathlib import Path
 
 class Camera:
-    def __init__(self, config_file_name: str):
+    def __init__(self, calib_fpath: str):
         # ***************************** Loading Camera Calibration ****************************
         script_path = Path(__file__).resolve()
         self.project_root = script_path.parents[2] 
         config_dir = self.project_root / "config"
-        config_path = str(config_dir / config_file_name)
+        config_path = str(config_dir / calib_fpath)
         
         # Load calibration data once during initialization
         try:
@@ -68,3 +68,8 @@ class Camera:
         print(f"saved to {full_output_path}")
         return str(full_output_path)
 
+if __name__ == "__main__":
+    cam = Camera("fisheye_camera_calibration.npz")
+    print("calibration:")
+    print(cam.K)
+    print(cam.D)

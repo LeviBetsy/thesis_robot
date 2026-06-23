@@ -2,7 +2,7 @@ import sys
 import os
 
 # Adds the project root (two levels up from this file) to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 from app.module.uart import *
 from app.control.keyboard_controller_ssh import *
