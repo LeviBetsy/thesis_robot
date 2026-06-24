@@ -5,6 +5,7 @@ myvenv*/
 
 models
 ai-models
+ai_models
 
 .python-version
 yolo26n.pt

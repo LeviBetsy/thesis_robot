@@ -1,7 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+from app.module.camera import Camera
 import numpy as np
 
+
 class Robot:
-    def __init__(self):
+    def __init__(self, camera_calib_fpath):
         """
         Initializes the Robot with its position, orientation, and camera matrices.
             camera_transform_matrix (np.ndarray, optional): A 4x4 homogeneous transformation matrix 
@@ -11,9 +16,11 @@ class Robot:
         self.y = 0
         self.theta = 0
 
-        angle = np.radians(30) #Initilize the camera to tilt 30 degree down from the mounting position
-        self.cam_R = np.array([
+        angle = np.radians(-30) # Initilize the camera to tilt 30 degree down from the mounting position
+        self.cam_R = np.array([ # Rotation matrix to get camera coordinate to robot coordinate
             [1, 0, 0],
             [0, np.cos(angle), -np.sin(angle)],
             [0, np.sin(angle), np.cos(angle)]
         ])
+        self.cam_t = np.array([0, 0.07, 0.11]) # Translation vector to get camera to robot coorindate, 7 cm down, 11 cm forward
+        self.camera = Camera(camera_calib_fpath)

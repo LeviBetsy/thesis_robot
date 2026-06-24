@@ -13,7 +13,7 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 if root_path not in sys.path:
     sys.path.append(root_path)
 
-from models.DAV2.metric_depth.depth_anything_v2.dpt import DepthAnythingV2
+from ai_models.DAV2.metric_depth.depth_anything_v2.dpt import DepthAnythingV2
 
 
 
@@ -41,13 +41,9 @@ class DepthAnythingPredictor:
         if encoder not in model_configs:
             raise ValueError(f"Invalid encoder: {encoder}")
         
-        
-        dataset = 'hypersim' # 'hypersim' for indoor model, 'vkitti' for outdoor model
-        max_depth = 20 # 20 for indoor model, 80 for outdoor model
-
         # Load model
         self.model = DepthAnythingV2(**model_configs[encoder])
-        self.model.load_state_dict(torch.load(f'{self.project_root / "app" / "models"}/DAV2_checkpoint/depth_anything_v2_{encoder}.pth', map_location="cpu"))
+        self.model.load_state_dict(torch.load(f'{self.project_root / "ai_models"}/DAV2_checkpoint/depth_anything_v2_{encoder}.pth', map_location="cpu"))
         self.model = self.model.to(self.device).eval()
 
         # Default colormap

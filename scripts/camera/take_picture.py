@@ -71,7 +71,6 @@ def take_picture():
 
     # Clean up and release the hardware resources
     cam.release()
-    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     take_picture()

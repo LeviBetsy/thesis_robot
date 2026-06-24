@@ -16,6 +16,8 @@ class Camera:
                 # Adjust string keys if your variables were saved under different names
                 self.K = np.array(calib_data['camera_matrix'], dtype=np.float32)
                 self.D = np.array(calib_data['distortion_coefficients'], dtype=np.float32)
+                self.w = int(calib_data['width'].item())
+                self.h = int(calib_data['height'].item())
         except FileNotFoundError:
             raise FileNotFoundError(f"Calibration configuration file not found at: {config_path}")
         except KeyError as e:
@@ -69,7 +71,9 @@ class Camera:
         return str(full_output_path)
 
 if __name__ == "__main__":
-    cam = Camera("fisheye_camera_calibration.npz")
+    cam = Camera("new_calib.npz")
     print("calibration:")
     print(cam.K)
     print(cam.D)
+    print(cam.w)
+    print(cam.h)

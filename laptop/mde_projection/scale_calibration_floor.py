@@ -123,7 +123,7 @@ class FloorScaleCorrection:
     def relative_to_metric(self, d_rel: np.array) -> np.array:
         result = np.full_like(d_rel, -1.0, dtype=float)
         
-        valid_maskk = valid_mask = d_rel >= self.min_calibrated_rel
+        valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
         valid_vals = d_rel[valid_mask]
 
 

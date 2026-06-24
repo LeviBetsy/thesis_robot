@@ -61,7 +61,6 @@ def calibrate_fisheye():
     print("Found " + str(N_OK) + " valid images for calibration")
     print("K=np.array(" + str(K.tolist()) + ")")
     print("D=np.array(" + str(D.tolist()) + ")")
-    print("Retavl={retval}")
 
 
     #****************** Save intrinsic matrix and distortion coeff *********

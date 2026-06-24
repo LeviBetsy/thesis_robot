@@ -3,8 +3,8 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from scripts.mde.DAV2_pth import DepthAnythingPredictor
 from laptop.mde_projection.scale_calibration_floor import FloorScaleCorrection
-from app.modules.camera.inv_persp_proj import InversePerspectiveProjection
 from app.module.robot import Robot
+from app.mapping.point_cloud import PointCloudProcessor
 
 import cv2
 import time
@@ -38,14 +38,11 @@ def main(imshow=False):
     # #*********************************************************************
 
     # Initialize Robot
-    robot = Robot()
-
-    # Initialize Scale Correction And Projetion Math
+    robot = Robot("fisheye_calib.npz")
     fsc = FloorScaleCorrection("z_real_undistort_ref6")
+    pcd_processor = PointCloudProcessor(robot)
 
-    ipp = InversePerspectiveProjection(height=480,
-                                       width=640,
-                                       cam_calib_fname="fisheye_camera_calibration.npz")
+
     pcd = o3d.geometry.PointCloud() #Visualizer
 
     prev_time = time.perf_counter()
@@ -73,18 +70,16 @@ def main(imshow=False):
             fsc.scale_correction(rel_depth_map, False)
             metric_map = fsc.relative_to_metric(rel_depth_map)
 
-            point_cloud = ipp.proj_point_cloud_cc(metric_map)
-            # print(point_cloud.shape)
-            # print(point_cloud[:50])
+            point_cloud_cc = pcd_processor.proj_pcd_cc(metric_map)
+            point_cloud_rc = pcd_processor.pcd_camera_to_robot(point_cloud_cc)
 
-            pcd.points = o3d.utility.Vector3dVector(point_cloud)
+            pcd.points = o3d.utility.Vector3dVector(point_cloud_rc)
             # print(pcd.colors.shape)
             
 
 
             axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
             o3d.visualization.draw_geometries([pcd, axes])
-
 
 
             # ***************** Debug ***********************
