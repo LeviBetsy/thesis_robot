@@ -5,7 +5,7 @@ on the ground that you know the distance of each cell for
 
 import os
 import glob
-import cv2 as cv
+import cv2
 import numpy as np
 from pathlib import Path
 import sys
@@ -49,26 +49,26 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
     #********************************************************************************
 
     # Find Corners
-    imgBGR = cv.imread(cboard_path)
-    imgGray = cv.cvtColor(imgBGR, cv.COLOR_BGR2GRAY)
+    imgBGR = cv2.imread(cboard_path)
+    imgGray = cv2.cvtColor(imgBGR, cv2.COLOR_BGR2GRAY)
     
     #cornersFound is true/false
-    cornersFound, cornersOrg = cv.findChessboardCorners(imgGray, (pattern_x, pattern_y), None)
+    cornersFound, cornersOrg = cv2.findChessboardCorners(imgGray, (pattern_x, pattern_y), None)
 
     if (cornersFound):
-        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        cornersOrg = cv.cornerSubPix(imgGray, cornersOrg, (11, 11), (-1, -1), criteria)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        cornersOrg = cv2.cornerSubPix(imgGray, cornersOrg, (11, 11), (-1, -1), criteria)
         if (showPics):
-            cv.drawChessboardCorners(imgBGR, (pattern_x, pattern_y), cornersOrg, cornersFound)
-            cv.imshow('Checkerboard Corners', imgBGR)
-            cv.waitKey(0)
+            cv2.drawChessboardCorners(imgBGR, (pattern_x, pattern_y), cornersOrg, cornersFound)
+            cv2.imshow('Checkerboard Corners', imgBGR)
+            cv2.waitKey(0)
         
         #************************** Solve Pnp *************************************
         IU = ImageUndistorter(config_file)
-        undistorted = cv.fisheye.undistortPoints(cornersOrg, IU.K, IU.D)
-        sucess, rvec, tvec = cv.solvePnP(P_obj, undistorted, np.eye(3), None)
+        undistorted = cv2.fisheye.undistortPoints(cornersOrg, IU.K, IU.D)
+        sucess, rvec, tvec = cv2.solvePnP(P_obj, undistorted, np.eye(3), None)
         tvec = tvec.flatten()
-        R, _ = cv.Rodrigues(rvec)
+        R, _ = cv2.Rodrigues(rvec)
         P_cam = np.zeros((pattern_y*pattern_x, 3), dtype=np.float32)
         for i in range(pattern_y*pattern_x):
             P_cam[i] = (R @ P_obj[i]) + tvec
@@ -84,20 +84,20 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
             
             depth = P_cam[i][2]
             # depth = math.sqrt(P_cam[i][0]**2 + P_cam[i][1]**2 + P_cam[i][2]**2)
-            cv.circle(imgPlot, (px_x, px_y), radius=4, color=(0, 255, 0), thickness=-1)
+            cv2.circle(imgPlot, (px_x, px_y), radius=4, color=(0, 255, 0), thickness=-1)
             
             text = f"{depth:.2f}m"
             
             # 5. Draw the text slightly above the corner point
             # Parameters: image, text, bottom-left corner of text, font, scale, color, thickness
-            cv.putText(imgPlot, text, (px_x - 15, px_y - 10), 
-                        cv.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1, cv.LINE_AA)
+            cv2.putText(imgPlot, text, (px_x - 15, px_y - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1, cv2.LINE_AA)
         
         #Saving Image
         output_dir = project_root / "data" / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
         img_save_path = str(output_dir / f"mapped_fisheye_{d_ref_img}")
-        cv.imwrite(img_save_path, imgPlot)
+        cv2.imwrite(img_save_path, imgPlot)
         print(f"Successfully saved mapped image to: {img_save_path}")
 
         #Saving npz file
@@ -111,7 +111,7 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
     else:
         raise Exception("cant find corners") 
 
-    cv.destroyAllWindows()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
   find_checker_metric("ref6.jpg", "fisheye_camera_calibration.npz", 0.0285, False)

@@ -4,20 +4,21 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
-import cv2 as cv
+import cv2
 import numpy as np
 from app.module.camera import Camera
 
 class CameraStreamer:
-    def __init__(self, host: str = "127.0.0.1", port: int = 5002, width: int = 640, height: int = 480, fps: int = 30, camera=None):
+    def __init__(self, host: str = "127.0.0.1", port: int = 5002, fps: int = 30, camera: Camera = None):
         """
         Initializes the GStreamer pipeline for streaming processed frames.
         Uses tcpclientsink to ensure compatibility with standard SSH tunnels.
         """
-        self.width = width
-        self.height = height
-        self.fps = fps
         self.camera = camera
+        self.width = camera.w
+        self.height = camera.h
+        self.fps = fps
+        
         
         # Pipeline configured for TCP streaming (compatible with SSH port forwarding)
         self.pipeline = (
@@ -30,9 +31,9 @@ class CameraStreamer:
             "tcpserversink host=127.0.0.1 port=5002 sync=false"
         )
 
-        self.writer = cv.VideoWriter(
+        self.writer = cv2.VideoWriter(
             self.pipeline,
-            cv.CAP_GSTREAMER,
+            cv2.CAP_GSTREAMER,
             0, # 0 means fourcc is ignored for GStreamer pipelines
             self.fps,
             (self.width, self.height),
@@ -57,7 +58,7 @@ class CameraStreamer:
             
         # Ensure frame dimensions match the pipeline expectations
         if (frame.shape[1], frame.shape[0]) != (self.width, self.height):
-            frame = cv.resize(frame, (self.width, self.height))
+            frame = cv2.resize(frame, (self.width, self.height))
             
         # Push the frame into the GStreamer pipeline
         self.writer.write(frame)
@@ -67,30 +68,22 @@ class CameraStreamer:
         self.writer.release()
 
 
-# Example Usage Integration:
 if __name__ == "__main__":
-    cam_inst = Camera("fisheye_camera_calibration.npz")
-    
-    # host="127.0.0.1" assumes you are using an SSH local forward (ssh -L)
-    streamer = CameraStreamer(host="127.0.0.1", port=5002, camera=cam_inst)
-    
-    cap = cv.VideoCapture(0)
-    width = cap.get(cv.CAP_PROP_FRAME_WIDTH)
-    height = cap.get(cv.CAP_PROP_FRAME_HEIGHT)
-
-    print(f"Camera Resolution: {int(width)}x{int(height)}")
-    
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-                
-            # Pass the frame and the boolean flag
-            streamer.stream_frame(frame, do_undistort=True)
-            
-    except KeyboardInterrupt:
-        pass
-    finally:
-        cap.release()
-        streamer.release()
+    cam = Camera("new_calib.npz")
+    stream = CameraStreamer(camera=cam)
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Could not open camera.")
+    else: 
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    print("Failed to grab frame.")
+                    break
+                stream.stream_frame(frame, True)
+        except Exception:
+            raise Exception("something")
+        finally:
+            cap.release()
+            stream.release()

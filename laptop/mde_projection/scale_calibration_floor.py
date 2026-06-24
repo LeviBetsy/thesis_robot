@@ -3,7 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RidgeCV, Ridge
 import time
-import cv2 as cv
+import cv2 
 import math
 from scipy.optimize import curve_fit
 
@@ -76,9 +76,9 @@ class FloorScaleCorrection:
         # # lambdas_to_test = np.logspace(-6, 6, 13) 
         # # # cv=5 means 5-fold cross-validation
         # # ridge_cv = RidgeCV(alphas=lambdas_to_test, fit_intercept=False, cv=5)
-        # # ridge_cv.fit(A, b)
-        # # optimal_lambda = ridge_cv.alpha_
-        # # x = ridge_cv.coef_
+        # # ridge_cv2.fit(A, b)
+        # # optimal_lambda = ridge_cv2.alpha_
+        # # x = ridge_cv2.coef_
         # # print(f"Optimal Lambda: {optimal_lambda}")
 
         # # Without cross validation

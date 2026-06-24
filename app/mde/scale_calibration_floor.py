@@ -3,7 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RidgeCV, Ridge
 import time
-import cv2 as cv
+import cv2
 from scipy.optimize import curve_fit
 
 class FloorScaleCorrection:
@@ -169,7 +169,7 @@ class FloorScaleCorrection:
             raise FileNotFoundError(f"Image file {cb_path} does not exist.")
             
         # Load image using OpenCV
-        img = cv.imread(str(cb_path))
+        img = cv2.imread(str(cb_path))
         if img is None:
             raise FileNotFoundError("no file")
         
@@ -192,25 +192,25 @@ class FloorScaleCorrection:
                 
                 # Draw a small solid dot/circle at the rounded (x, y) location
                 # cv uses (B, G, R) color format. (0, 255, 0) is pure green.
-                cv.circle(img, (x, y), radius=3, color=(0, 255, 0), thickness=-1)
+                cv2.circle(img, (x, y), radius=3, color=(0, 255, 0), thickness=-1)
                 
                 # Annotate the numerical text slightly offset (+5 pixels) from the dot
-                cv.putText(
+                cv2.putText(
                     img, 
                     text, 
                     (x + 5, y - 5), 
-                    fontFace=cv.FONT_HERSHEY_SIMPLEX, 
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
                     fontScale=0.3, 
                     color=(0, 0, 255), # Red text
                     thickness=1,
-                    lineType=cv.LINE_AA
+                    lineType=cv2.LINE_AA
                 )
 
         # Save the annotated image out to your plots/output directory
         output_dir = self.project_root / "data" / "output"
         output_path = output_dir / f"{plot_file}.jpg"
         
-        cv.imwrite(str(output_path), img)
+        cv2.imwrite(str(output_path), img)
         print(f"Annotated image successfully saved to {output_path}")
 
 

@@ -81,5 +81,10 @@ sudo apt install gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0
 brew install ffmpeg --with-sdl2 on laptop
 
 
-# Capture and undistort image from Pi -> Stream to Laptop -> Laptop run DAV2 -> Return depth map to Pi
+## Capture and undistort image from Pi -> Stream to Laptop -> Laptop run DAV2 -> Return depth map to Pi
 gst-launch-1.0 tcpclientsrc host=127.0.0.1 port=5002 ! matroskademux ! h264parse ! decodebin ! videoconvert ! autovideosink sync=false
+
+# MDE Localization test
+sudo apt install libgirepository-2.0-dev
+pip install PyGObject
+pip install pyzmq

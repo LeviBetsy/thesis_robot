@@ -1,5 +1,5 @@
 import numpy as np
-import cv2 as cv
+import cv2
 from pathlib import Path
 
 class Camera:
@@ -38,7 +38,7 @@ class Camera:
             raise ValueError("Input frame is None. Verify the image or camera stream source.")
         Knew = self.K.copy()
         Knew[(0,1), (0,1)] = 1 * Knew[(0,1), (0,1)] #use knew to scale the image, required so code no error
-        return cv.fisheye.undistortImage(frame, self.K, self.D, None, Knew)
+        return cv2.fisheye.undistortImage(frame, self.K, self.D, None, Knew)
     
     def undistort_fisheye_save(self, frame: np.ndarray, out_fpath: str) -> str:
         """
@@ -64,7 +64,7 @@ class Camera:
         ud_frame = self.undistort_fisheye(frame)
         
         # Save using OpenCV
-        success = cv.imwrite(str(full_output_path), ud_frame)
+        success = cv2.imwrite(str(full_output_path), ud_frame)
         if not success:
             raise IOError(f"Failed to write image to {full_output_path}. Check file permissions or extension.")
         print(f"saved to {full_output_path}")
