@@ -60,6 +60,10 @@ class PointCloudProcessor:
         """
         pcd_rc = (pcd_cc @ self.robot.cam_R.T) + self.robot.cam_t
         return pcd_rc
+    
+    def average_floor_z(self, pcd_rc: np.ndarray) -> float:
+        return np.mean(pcd_rc[:, 2])
+
 
     
     

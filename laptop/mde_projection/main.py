@@ -39,7 +39,7 @@ def main(imshow=False):
 
     # Initialize Robot
     robot = Robot("fisheye_calib.npz")
-    fsc = FloorScaleCorrection("z_real_undistort_ref6")
+    fsc = FloorScaleCorrection("z_real")
     pcd_processor = PointCloudProcessor(robot)
 
 
@@ -55,7 +55,7 @@ def main(imshow=False):
             #     time.sleep(0.1)
             #     continue
             # *******************************************
-            frame = cv2.imread("./data/test/test_point_cloud.png")
+            frame = cv2.imread("./data/flat_floor/floor2.png")
 
             rel_depth_map = predictor.model.infer_image(frame)
 
@@ -72,6 +72,8 @@ def main(imshow=False):
 
             point_cloud_cc = pcd_processor.proj_pcd_cc(metric_map)
             point_cloud_rc = pcd_processor.pcd_camera_to_robot(point_cloud_cc)
+            z_avg = pcd_processor.average_floor_z(point_cloud_rc)
+            print(f"average z: {z_avg}")
 
             pcd.points = o3d.utility.Vector3dVector(point_cloud_rc)
             # print(pcd.colors.shape)
