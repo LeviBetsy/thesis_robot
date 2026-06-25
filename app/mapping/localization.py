@@ -36,7 +36,7 @@ class OdometryLocalization:
         delta_theta = (dr - dl)/self.robot.w
 
         with self.robot.mutex_lock:
-            new_x = self.robot.x + (d*math.cos(self.robot.x + (delta_theta/2)))
-            new_y = self.robot.y - (d*math.sin(self.robot.y + (delta_theta/2)))
+            new_x = self.robot.x + (d*math.cos(self.robot.theta + (delta_theta/2)))
+            new_y = self.robot.y - (d*math.sin(self.robot.theta + (delta_theta/2)))
             new_theta = self.robot.theta + delta_theta
             self.robot.set_robot_pose(new_x, new_y, new_theta)

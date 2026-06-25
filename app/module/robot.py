@@ -16,7 +16,7 @@ class Robot:
         """
         self.x = 0
         self.y = 0
-        self.theta = 0
+        self.theta = float(np.radians(90))
 
         angle = np.radians(-30) # Initilize the camera to tilt 30 degree down from the mounting position
         self.cam_R = np.array([ # Rotation matrix to get camera coordinate to robot coordinate

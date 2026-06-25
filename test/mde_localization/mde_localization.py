@@ -19,7 +19,7 @@ msp432_uart = MSP432Uart()
 msp432_uart.start_receiving() #THREAD 1: to listen to odometry data from MSP432 and fill buffer
 
 #Robot
-robot = Robot("new_calib.npz")
+robot = Robot("fisheye_calib.npz")
 
 # #Localization
 loc = OdometryLocalization(robot=robot)
@@ -40,5 +40,6 @@ while True:
     # state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
     with robot.mutex_lock:
         state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
+        print(state)
     socket.send_string(f"state {json.dumps(state)}")
     time.sleep(0.02)

@@ -32,6 +32,7 @@ def main():
     cam = Camera("fisheye_calib.npz")
     pose_streamer = PoseStreamer(port=5000) # Pose Streamer
     video_streamer = GIVideoStreamer(camera=cam) # Camera Steamer
+    timestamp = 0
 
     cap = cv2.VideoCapture(0)
     try:
@@ -50,11 +51,11 @@ def main():
             except zmq.Again:
                 # No new position packet; reuse the last known position
                 pass
-
             pose_streamer.send_data(latest_pose)
             
             # Video Stream
-            video_streamer.stream_frame(frame, True)
+            video_streamer.stream_frame(timestamp, frame, True)
+            timestamp += video_streamer.duration
             
             # Sleep to match the target framerate (accounting for processing time)
             processing_time = time.time() - loop_start
