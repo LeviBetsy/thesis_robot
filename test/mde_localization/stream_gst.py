@@ -17,7 +17,7 @@ from gi.repository import Gst
 import zmq
 
 from app.stream.pose_stream import PoseStreamer
-from app.stream.camera_stream import GICameraStreamer
+from app.stream.video_stream import GIVideoStreamer
 from app.module.camera import Camera
 
 def main():
@@ -31,7 +31,7 @@ def main():
 
     cam = Camera("fisheye_calib.npz")
     pose_streamer = PoseStreamer(port=5000) # Pose Streamer
-    video_streamer = GICameraStreamer(camera=cam) # Camera Steamer
+    video_streamer = GIVideoStreamer(camera=cam) # Camera Steamer
     timestamp = 0
 
     cap = cv2.VideoCapture(0)

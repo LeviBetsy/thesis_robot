@@ -15,7 +15,7 @@ from app.module.camera import Camera
 if not Gst.is_initialized():
     Gst.init(sys.argv)
 
-class GICameraStreamer:
+class GIVideoStreamer:
     def __init__(self, host: str = "127.0.0.1", port: int = 5002, fps: int = 30, camera = None):
         """
         Initializes the GStreamer pipeline via gi for streaming processed frames.
@@ -24,7 +24,6 @@ class GICameraStreamer:
         self.width = camera.w if camera else 640
         self.height = camera.h if camera else 480
         self.fps = fps
-        
 
         pipeline_str = (
             f"appsrc name=source is-live=true format=GST_FORMAT_TIME ! "
@@ -85,6 +84,72 @@ class GICameraStreamer:
         """Closes the GStreamer pipeline cleanly."""
         if self.appsrc:
             self.appsrc.emit('end-of-stream')
+        if self.pipeline:
+            self.pipeline.set_state(Gst.State.NULL)
+
+class GIVideoReceiver:
+    def __init__(self, host: str = "127.0.0.1", port: int = 5002, callback=None, camera: Camera = None):
+        """
+        Initializes the GStreamer pipeline to receive and decode the TCP video stream.
+        
+        :param callback: A function that takes (frame: np.ndarray, pts: float)
+        """
+        self.host = host
+        self.port = port
+        self.callback = callback
+        self.camera = camera
+        
+        pipeline_str = (
+            f"tcpclientsrc host={self.host} port={self.port} ! "
+            f"matroskademux ! "
+            f"h264parse ! avdec_h264 ! "
+            f"videoconvert ! video/x-raw, format=BGR ! "
+            f"appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
+        )
+        self.pipeline = Gst.parse_launch(pipeline_str)
+        self.appsink = self.pipeline.get_by_name('sink')
+        if not self.appsink:
+            raise RuntimeError("Failed to get appsink from pipeline.")
+        self.appsink.connect("new-sample", self._new_sample_handler) #attach process callback for whenever receive frame
+            
+        self.pipeline.set_state(Gst.State.PLAYING)
+        print(f"Receiver attempting to connect to tcp://{self.host}:{self.port}...")
+
+    def _new_sample_handler(self, sink):
+        """
+        Internal callback triggered by GStreamer. Extracts the data and routes it
+        to the user-defined callback.
+        """
+        sample = sink.emit("pull-sample")
+        if not sample:
+            return Gst.FlowReturn.ERROR
+            
+        buffer = sample.get_buffer()
+        caps = sample.get_caps()
+        
+        pts = buffer.pts
+        
+        # Map Memory
+        success, map_info = buffer.map(Gst.MapFlags.READ)
+        if success:
+            try:
+                frame = np.ndarray(
+                    shape=(self.camera.h, self.camera.w, 3),
+                    dtype=np.uint8,
+                    buffer=map_info.data
+                )
+                frame_copy = frame.copy()
+                
+                # TRIGGER THE USER'S CALLBACK
+                self.callback(frame_copy, pts)
+                    
+            finally:
+                buffer.unmap(map_info)
+                
+        return Gst.FlowReturn.OK
+
+    def release(self):
+        """Closes the receiver pipeline cleanly."""
         if self.pipeline:
             self.pipeline.set_state(Gst.State.NULL)
 

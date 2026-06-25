@@ -17,6 +17,7 @@ from laptop.mde_projection.scale_calibration_floor import FloorScaleCorrection
 from app.module.robot import Robot
 from app.mapping.point_cloud import PointCloudProcessor
 from app.stream.pose_stream import PoseReceiver
+from app.stream.video_stream import GIVideoReceiver
 
 # **********************************************************************
 
@@ -31,7 +32,8 @@ pose_cache = {}
 
 # Robot
 robot = Robot("fisheye_calib.npz")
-w, h = robot.camera.w, robot.camera.h
+camera = robot.camera
+w, h = camera.w, camera.h
 
 # **********************************************************************
 
@@ -56,25 +58,10 @@ def queue_sync(pts):
     #     if not display_queue.full():
     #         display_queue.put((frame, state))
 
-# def callback_new_video(sink):
-#     print("got new video")
-#     """Callback triggered when a new video frame arrives from the network."""
-#     sample = sink.emit("pull-sample")
-#     if not sample:
-#         return Gst.FlowReturn.ERROR
-
-#     buf = sample.get_buffer()
-#     pts = buf.pts # The synchronization key
-
-#     result, map_info = buf.map(Gst.MapFlags.READ)
-#     if result:
-#         frame = np.ndarray((h, w, 3), buffer=map_info.data, dtype=np.uint8).copy() # .copy() to prevent memory corruption when GStreamer unmaps the buffer.
-#         buf.unmap(map_info)
-        
-#         video_cache[pts] = frame
-#         check_and_queue_sync(pts)
-
-#     return Gst.FlowReturn.OK
+def callback_new_video(frame, pts):
+    video_cache[pts] = frame
+    queue_sync(pts)
+    cv2.imshow("Robot Stream", frame)
 
 def callback_new_pose(pose):
     """Callback triggered when a new telemetry JSON string arrives."""
@@ -84,11 +71,10 @@ def callback_new_pose(pose):
 
 # Receivers
 pose_receiver = PoseReceiver(callback=callback_new_pose)
-
+video_receiver = GIVideoReceiver(callback=callback_new_video, camera=camera)
 # **********************************************************************
 
 def main():
-
     try:
         while True:
             # Block and wait for a synchronized pair from the GStreamer callbacks
