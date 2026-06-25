@@ -43,10 +43,9 @@ class GIVideoStreamer:
         self.pipeline.set_state(Gst.State.PLAYING)
         
         # Timing variables
-        self.timestamp = 0
         self.duration = Gst.util_uint64_scale(1, Gst.SECOND, self.fps)
 
-    def stream_frame(self, frame: np.ndarray, do_undistort: bool = False):
+    def stream_frame(self, pts, frame: np.ndarray, do_undistort: bool = False):
         """
         Conditionally undistorts the image and pushes it to the GStreamer pipeline.
         
@@ -67,8 +66,8 @@ class GIVideoStreamer:
         buf.fill(0, data)
         
         # Set the Presentation Timestamp (PTS) and duration
-        buf.pts = self.timestamp
-        buf.dts = self.timestamp
+        buf.pts = pts
+        buf.dts = pts
         buf.duration = self.duration
         
         # Push the buffer into the appsrc
@@ -77,8 +76,6 @@ class GIVideoStreamer:
         if retval != Gst.FlowReturn.OK:
             print(f"Failed to push buffer to appsrc. Return code: {retval}")
             
-        # Increment the timestamp for the next frame
-        self.timestamp += self.duration
 
     def release(self):
         """Closes the GStreamer pipeline cleanly."""
@@ -125,7 +122,6 @@ class GIVideoReceiver:
             return Gst.FlowReturn.ERROR
             
         buffer = sample.get_buffer()
-        caps = sample.get_caps()
         
         pts = buffer.pts
         

@@ -48,15 +48,15 @@ def main():
                 msg = zmq_socket.recv_string(flags=zmq.NOBLOCK)
                 topic, json_data = msg.split(" ", 1)
                 latest_pose = json.loads(json_data)
-                latest_pose["pts"] = timestamp
             except zmq.Again:
                 # No new position packet; reuse the last known position
                 pass
+            latest_pose["pts"] = timestamp
 
             pose_streamer.send_data(latest_pose)
             
             # Video Stream
-            video_streamer.stream_frame(frame, True)
+            video_streamer.stream_frame(timestamp, frame, True)
                 
             # Increment the timestamp for the next frame
             timestamp += video_streamer.duration

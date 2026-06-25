@@ -24,7 +24,8 @@ from app.stream.video_stream import GIVideoReceiver
 # ***************************** Initialize *****************************
 
 # Initialize GStreamer
-Gst.init(None)
+if not Gst.is_initialized():
+    Gst.init(sys.argv)
 display_queue = queue.Queue(maxsize=10) # Queue to pass synchronized frames to the main thread for calculation
 # Dictionaries to hold arriving buffers until their matching partner arrives
 video_cache = {}
@@ -42,26 +43,29 @@ w, h = camera.w, camera.h
 def queue_sync(pts):
     """Checks if we have BOTH the video and data for a given timestamp.
         And then push it to a queue for process """
-    pass
-    # if pts in video_cache and pts in data_cache:
-    #     # We have a match! Extract them and remove from caches.
-    #     frame = video_cache.pop(pts)
-    #     state = data_cache.pop(pts)
+    # pass
+    print(pose_cache.keys())
+    print(video_cache.keys())
+    if pts in video_cache and pts in pose_cache:
+        print("MATCH")
+        # We have a match! Extract them and remove from caches.
+        frame = video_cache.pop(pts)
+        state = pose_cache.pop(pts)
         
-    #     # Clean up old orphaned frames in case packets were dropped over the network
-    #     for old_pts in list(video_cache.keys()):
-    #         if old_pts < pts: del video_cache[old_pts]
-    #     for old_pts in list(data_cache.keys()):
-    #         if old_pts < pts: del data_cache[old_pts]
+        # Clean up old orphaned frames in case packets were dropped over the network
+        for old_pts in list(video_cache.keys()):
+            if old_pts < pts: del video_cache[old_pts]
+        for old_pts in list(pose_cache.keys()):
+            if old_pts < pts: del pose_cache[old_pts]
 
-    #     # Push the synchronized pair to the main thread
-    #     if not display_queue.full():
-    #         display_queue.put((frame, state))
+        # Push the synchronized pair to the main thread
+        if not display_queue.full():
+            display_queue.put((frame, state))
 
 def callback_new_video(frame, pts):
     video_cache[pts] = frame
     queue_sync(pts)
-    cv2.imshow("Robot Stream", frame)
+    # cv2.imshow("Robot Stream", frame)
 
 def callback_new_pose(pose):
     """Callback triggered when a new telemetry JSON string arrives."""
@@ -94,11 +98,14 @@ def main():
             # Press 'q' to quit
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Stopping...")
     finally:
         # pipeline.set_state(Gst.State.NULL)
+        pose_receiver.stop()
+        video_receiver.release()
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
