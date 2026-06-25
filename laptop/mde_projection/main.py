@@ -81,8 +81,6 @@ def callback_new_pose(pose):
     pts = pose["pts"]
     pose_cache[pts] = pose
     queue_sync(pts)
-    print(f"received {pose}")
-    print(f"modified {pose_cache}")
 
 # Receivers
 pose_receiver = PoseReceiver(callback=callback_new_pose)

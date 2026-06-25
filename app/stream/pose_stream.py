@@ -3,7 +3,7 @@ import threading
 import json
 import time
 
-class PoseStream:
+class PoseStreamer:
     def __init__(self, port=5000):
         self.port = port
         # Set up a standard TCP socket
@@ -61,12 +61,8 @@ class PoseReceiver:
         
         # Start the background thread
         self.thread = threading.Thread(target=self._run, daemon=True)
-        
-        
-    
-    def start(self):
         self.thread.start()
-
+        
     def _run(self):
         while self.running:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

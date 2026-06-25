@@ -6,9 +6,89 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 
 import cv2
 import numpy as np
+import gi
+gi.require_version('Gst', '1.0')
+gi.require_version('GstApp', '1.0')
+from gi.repository import Gst
 from app.module.camera import Camera
 
-class CameraStreamer:
+if not Gst.is_initialized():
+    Gst.init(sys.argv)
+
+class GICameraStreamer:
+    def __init__(self, host: str = "127.0.0.1", port: int = 5002, fps: int = 30, camera = None):
+        """
+        Initializes the GStreamer pipeline via gi for streaming processed frames.
+        """
+        self.camera = camera
+        self.width = camera.w if camera else 640
+        self.height = camera.h if camera else 480
+        self.fps = fps
+        
+
+        pipeline_str = (
+            f"appsrc name=source is-live=true format=GST_FORMAT_TIME ! "
+            f"video/x-raw, format=BGR, width={self.width}, height={self.height}, framerate={self.fps}/1 ! "
+            f"videoconvert ! "
+            f"video/x-raw, format=I420 ! "
+            f"x264enc tune=zerolatency bitrate=1500 speed-preset=ultrafast ! "
+            f"matroskamux streamable=true ! "
+            f"tcpserversink host={host} port={port} sync=false"
+        )
+        
+        # Parse the string into a functioning pipeline
+        self.pipeline = Gst.parse_launch(pipeline_str)
+        self.appsrc = self.pipeline.get_by_name('source')
+        if not self.appsrc:
+            raise RuntimeError("Failed to get appsrc from pipeline.")
+        self.pipeline.set_state(Gst.State.PLAYING)
+        
+        # Timing variables
+        self.timestamp = 0
+        self.duration = Gst.util_uint64_scale(1, Gst.SECOND, self.fps)
+
+    def stream_frame(self, frame: np.ndarray, do_undistort: bool = False):
+        """
+        Conditionally undistorts the image and pushes it to the GStreamer pipeline.
+        
+        :param frame: The raw input image (NumPy array)
+        :param do_undistort: Boolean flag to apply fisheye undistortion
+        """
+        if frame is None:
+            return
+            
+        if do_undistort and self.camera:
+            frame = self.camera.undistort_fisheye(frame)
+            
+        # Convert the numpy array to bytes
+        data = frame.tobytes()
+        
+        # Allocate a GStreamer buffer and copy the data into it
+        buf = Gst.Buffer.new_allocate(None, len(data), None)
+        buf.fill(0, data)
+        
+        # Set the Presentation Timestamp (PTS) and duration
+        buf.pts = self.timestamp
+        buf.dts = self.timestamp
+        buf.duration = self.duration
+        
+        # Push the buffer into the appsrc
+        retval = self.appsrc.emit('push-buffer', buf)
+        
+        if retval != Gst.FlowReturn.OK:
+            print(f"Failed to push buffer to appsrc. Return code: {retval}")
+            
+        # Increment the timestamp for the next frame
+        self.timestamp += self.duration
+
+    def release(self):
+        """Closes the GStreamer pipeline cleanly."""
+        if self.appsrc:
+            self.appsrc.emit('end-of-stream')
+        if self.pipeline:
+            self.pipeline.set_state(Gst.State.NULL)
+
+class OpenCVCameraStreamer:
     def __init__(self, host: str = "127.0.0.1", port: int = 5002, fps: int = 30, camera: Camera = None):
         """
         Initializes the GStreamer pipeline for streaming processed frames.
@@ -70,7 +150,7 @@ class CameraStreamer:
 
 if __name__ == "__main__":
     cam = Camera("new_calib.npz")
-    stream = CameraStreamer(camera=cam)
+    stream = OpenCVCameraStreamer(camera=cam)
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Error: Could not open camera.")
