@@ -28,7 +28,7 @@ class CameraStreamer:
             "video/x-raw, format=I420 ! "
             "x264enc tune=zerolatency bitrate=1500 speed-preset=ultrafast ! "
             "matroskamux streamable=true ! "
-            "tcpserversink host=127.0.0.1 port=5002 sync=false"
+            "tcpserversink host=127.0.0.1 port=5002 sync=true"
         )
 
         self.writer = cv2.VideoWriter(

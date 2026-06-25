@@ -36,6 +36,7 @@ socket.bind("tcp://127.0.0.1:5556")
 #Main loop
 while True:
     #update publisher for camera stream
-    state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
+    # state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
+    state = {"x": 12, "y": 2, "theta": robot.theta}
     socket.send_string(f"state {json.dumps(state)}")
     time.sleep(0.02)
