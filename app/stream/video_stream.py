@@ -45,7 +45,7 @@ class GIVideoStreamer:
         # Timing variables
         self.duration = Gst.util_uint64_scale(1, Gst.SECOND, self.fps)
 
-    def stream_frame(self, pts, frame: np.ndarray, do_undistort: bool = False):
+    def stream_frame(self, frame: np.ndarray, do_undistort: bool = False):
         """
         Conditionally undistorts the image and pushes it to the GStreamer pipeline.
         
@@ -66,8 +66,6 @@ class GIVideoStreamer:
         buf.fill(0, data)
         
         # Set the Presentation Timestamp (PTS) and duration
-        buf.pts = pts
-        buf.dts = pts
         buf.duration = self.duration
         
         # Push the buffer into the appsrc

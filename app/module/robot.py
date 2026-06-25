@@ -3,6 +3,8 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from app.module.camera import Camera
 import numpy as np
+import math
+import threading
 
 
 class Robot:
@@ -24,3 +26,15 @@ class Robot:
         ])
         self.cam_t = np.array([0, 0.07, 0.11]) # Translation vector to get camera to robot coorindate, 7 cm down, 11 cm forward
         self.camera = Camera(camera_calib_fpath)
+
+        #Robot description in meters
+        self.n = 360 #number of slots/rotation
+        self.d = 0.07 #70 mm diameter
+        self.w = 0.122 #122mm distance between wheels
+        self.c = math.pi*self.d #circumfrence of wheel
+
+        self.mutex_lock = threading.Lock() #mutex lock so only 1 thread access at once
+    def set_robot_pose(self, x, y, theta):
+        self.x = x
+        self.y = y
+        self.theta = theta

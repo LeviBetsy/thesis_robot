@@ -35,17 +35,19 @@ pose_cache = {}
 robot = Robot("fisheye_calib.npz")
 camera = robot.camera
 w, h = camera.w, camera.h
+latest_pose = [None]
+display_frame = [np.random.rand(480, 640, 3)]
 
 # **********************************************************************
 
 # # **************************** Callbacks *********************
 
-def queue_sync(pts):
+def queue_sync(pts,):
     """Checks if we have BOTH the video and data for a given timestamp.
         And then push it to a queue for process """
     # pass
-    print(pose_cache.keys())
-    print(video_cache.keys())
+    # print(pose_cache.keys())
+    # print(video_cache.keys())
     if pts in video_cache and pts in pose_cache:
         print("MATCH")
         # We have a match! Extract them and remove from caches.
@@ -63,15 +65,14 @@ def queue_sync(pts):
             display_queue.put((frame, state))
 
 def callback_new_video(frame, pts):
-    video_cache[pts] = frame
-    queue_sync(pts)
+    # if not display_queue.full():
+    #     display_queue.put((frame, latest_pose))
+    display_frame[0] = frame
     # cv2.imshow("Robot Stream", frame)
 
 def callback_new_pose(pose):
     """Callback triggered when a new telemetry JSON string arrives."""
-    pts = pose["pts"]
-    pose_cache[pts] = pose
-    queue_sync(pts)
+    latest_pose[0] = pose
 
 # Receivers
 pose_receiver = PoseReceiver(callback=callback_new_pose)
@@ -82,17 +83,16 @@ def main():
     try:
         while True:
             # Block and wait for a synchronized pair from the GStreamer callbacks
-            frame, state = display_queue.get()
+            frame = display_frame[0]
+            pose = latest_pose[0]
             
             # Extract your synchronized variables
-            robot_x = state.get("x", 0.0)
-            robot_y = state.get("y", 0.0)
-            robot_theta = state.get("theta", 0.0)
-            
-            # Overlay the data onto the synced frame
+            robot_x = pose.get("x", 0.0)
+            robot_y = pose.get("y", 0.0)
+            robot_theta = pose.get("theta", 0.0)
+
             text = f"Synced -> X: {robot_x:.2f} | Y: {robot_y:.2f} | T: {robot_theta:.2f}"
             cv2.putText(frame, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            
             cv2.imshow("Robot Stream (Laptop End)", frame)
             
             # Press 'q' to quit

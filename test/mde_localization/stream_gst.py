@@ -27,12 +27,11 @@ def main():
     zmq_socket.setsockopt_string(zmq.SUBSCRIBE, "state")
     zmq_socket.setsockopt(zmq.CONFLATE, 1)  # Drop old messages, only keep latest
     zmq_socket.connect("tcp://127.0.0.1:5556")
-    latest_pose = {"x": 0.0, "y": 0.0, "theta": 0.0, "pts": 0}
+    latest_pose = {"x": 0.0, "y": 0.0, "theta": 0.0}
 
     cam = Camera("fisheye_calib.npz")
     pose_streamer = PoseStreamer(port=5000) # Pose Streamer
     video_streamer = GIVideoStreamer(camera=cam) # Camera Steamer
-    timestamp = 0
 
     cap = cv2.VideoCapture(0)
     try:
@@ -51,15 +50,11 @@ def main():
             except zmq.Again:
                 # No new position packet; reuse the last known position
                 pass
-            latest_pose["pts"] = timestamp
 
             pose_streamer.send_data(latest_pose)
             
             # Video Stream
-            video_streamer.stream_frame(timestamp, frame, True)
-                
-            # Increment the timestamp for the next frame
-            timestamp += video_streamer.duration
+            video_streamer.stream_frame(frame, True)
             
             # Sleep to match the target framerate (accounting for processing time)
             processing_time = time.time() - loop_start
