@@ -1,6 +1,7 @@
 import socket
 import threading
 import json
+import time
 
 class PoseStream:
     def __init__(self, port=5000):
@@ -50,3 +51,60 @@ class PoseStream:
         if self.client_socket:
             self.client_socket.close()
         self.server_socket.close()
+
+class PoseReceiver:
+    def __init__(self, host='127.0.0.1', port=5000, callback=None):
+        self.host = host
+        self.port = port
+        self.running = True
+        self.callback = callback
+        
+        # Start the background thread
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        
+        
+    
+    def start(self):
+        self.thread.start()
+
+    def _run(self):
+        while self.running:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            print(f"Connecting to Pi telemetry on {self.host}:{self.port}...")
+            
+            try:
+                client_socket.connect((self.host, self.port))
+                print("Connected to telemetry successfully.")
+            except ConnectionRefusedError:
+                print("Connection failed. Retrying in 2 seconds...")
+                time.sleep(2)
+                continue
+
+            buffer = ""
+            try:
+                while self.running:
+                    data = client_socket.recv(1024)
+                    if not data:
+                        print("Connection closed by server.")
+                        break
+                        
+                    buffer += data.decode('utf-8')
+                    
+                    while '\n' in buffer:
+                        message, buffer = buffer.split('\n', 1)
+                        try:
+                            robot_pose = json.loads(message)
+                            self.callback(robot_pose)
+                        except json.JSONDecodeError:
+                            print("Received malformed JSON data.")
+                            
+            except Exception as e:
+                print(f"Socket error: {e}")
+            finally:
+                client_socket.close()
+                if self.running:
+                    print("Reconnecting...")
+                    time.sleep(1)
+
+    def stop(self):
+        self.running = False
