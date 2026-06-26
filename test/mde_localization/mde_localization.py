@@ -40,6 +40,5 @@ while True:
     # state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
     with robot.mutex_lock:
         state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
-        print(state)
     socket.send_string(f"state {json.dumps(state)}")
     time.sleep(0.02)

@@ -13,10 +13,11 @@ class Robot:
         Initializes the Robot with its position, orientation, and camera matrices.
             camera_transform_matrix (np.ndarray, optional): A 4x4 homogeneous transformation matrix 
                                                             for the camera. Defaults to a 4x4 identity matrix.
+            Coordinate system is based on unit wheel (CCW, +N -W -S +E) and 0 theta points East
         """
         self.x = 0
         self.y = 0
-        self.theta = float(np.radians(90))
+        self.theta = 0
 
         angle = np.radians(-30) # Initilize the camera to tilt 30 degree down from the mounting position
         self.cam_R = np.array([ # Rotation matrix to get camera coordinate to robot coordinate
