@@ -7,10 +7,14 @@ if root_path not in sys.path:
 import zmq
 import json
 import time
+import cv2
+
 from app.module.robot import Robot
 from app.module.uart import MSP432Uart
 from app.control.keyboard_controller_ssh import RobotController
 from app.mapping.localization import OdometryLocalization
+# from app.stream.zmq_pose_stream import PoseStreamer
+from app.stream.zmq_stream import PoseVideoStreamer
 #********************************************** IMPORTS **********************************************
 
 
@@ -30,15 +34,33 @@ controller = RobotController(msp432_uart.send_command)
 controller.start() #THREAD 3: start thread to listen for keyboard and sending command to msp432
 
 # ZeroMQ publisher for camera stream process
-context = zmq.Context()
-socket = context.socket(zmq.PUB)
-socket.bind("tcp://127.0.0.1:5556")
-state = {"x": 0, "y": 0, "theta": 0}
+# pose_streamer = PoseStreamer() #THREAD 4: thread to stream pose data
+streamer = PoseVideoStreamer()
+pose = {"x": 0, "y": 0, "theta": 0}
 #Main loop
-while True:
-    #update publisher for camera stream
-    # state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
-    with robot.mutex_lock:
-        state = {"x": robot.x, "y": robot.y, "theta": robot.theta}
-    socket.send_string(f"state {json.dumps(state)}")
-    time.sleep(0.02)
+cap = cv2.VideoCapture(0)
+try:
+    while True:
+        loop_start = time.time()
+
+        with robot.mutex_lock:
+            pose = {"x": robot.x, "y": robot.y, "theta": robot.theta}
+        ret, frame = cap.read()
+        if not ret:
+            print("Can't capture video frame")
+            raise RuntimeError("Cant capture video frame")
+        streamer.send_data(pose, frame)
+
+        # Making sure sending rate match intended fps
+        processing_time = time.time() - loop_start
+        sleep_time = (1.0 / streamer.fps) - processing_time
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+except KeyboardInterrupt:
+    print("stopping")
+except RuntimeError:
+    print("Something went wrong, closing program")
+finally:
+    streamer.stop()
+    msp432_uart.close()
+    controller.stop()
