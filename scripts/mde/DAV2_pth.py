@@ -49,8 +49,10 @@ class DepthAnythingPredictor:
         # Default colormap
         self.cmap = matplotlib.colormaps["turbo"]
 
+    def infer(self, frame: np.ndarray):
+        return self.model.infer_image(frame)
 
-    def infer_image(self, full_img_name):
+    def infer_image(self, full_img_name: str):
         """Run depth estimation on a single image in data/test."""
 
         test_dir = self.project_root / "data" / "test"

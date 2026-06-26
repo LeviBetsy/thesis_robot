@@ -2,11 +2,11 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 import json
-import queue
 import cv2
 import time
-import open3d as o3d
+# import open3d as o3d
 import numpy as np
+from pathlib import Path
 # Import GStreamer bindings
 import gi
 gi.require_version('Gst', '1.0')
@@ -26,49 +26,27 @@ from app.stream.video_stream import GIVideoReceiver
 # Initialize GStreamer
 if not Gst.is_initialized():
     Gst.init(sys.argv)
-display_queue = queue.Queue(maxsize=10) # Queue to pass synchronized frames to the main thread for calculation
-# Dictionaries to hold arriving buffers until their matching partner arrives
-video_cache = {}
-pose_cache = {}
 
 # Robot
 robot = Robot("fisheye_calib.npz")
 camera = robot.camera
 w, h = camera.w, camera.h
-latest_pose = [None]
+latest_pose = [{"x": 0, "y": 0, "theta": 0}]
 display_frame = [np.random.rand(480, 640, 3)]
+
+predictor = DepthAnythingPredictor()
+fsc = FloorScaleCorrection("z_real")
+pcd_processor = PointCloudProcessor(robot)
+# pcd = o3d.geometry.PointCloud() #Visualizer
+pcd_collection = []
 
 # **********************************************************************
 
-# # **************************** Callbacks *********************
-
-def queue_sync(pts,):
-    """Checks if we have BOTH the video and data for a given timestamp.
-        And then push it to a queue for process """
-    # pass
-    # print(pose_cache.keys())
-    # print(video_cache.keys())
-    if pts in video_cache and pts in pose_cache:
-        print("MATCH")
-        # We have a match! Extract them and remove from caches.
-        frame = video_cache.pop(pts)
-        state = pose_cache.pop(pts)
-        
-        # Clean up old orphaned frames in case packets were dropped over the network
-        for old_pts in list(video_cache.keys()):
-            if old_pts < pts: del video_cache[old_pts]
-        for old_pts in list(pose_cache.keys()):
-            if old_pts < pts: del pose_cache[old_pts]
-
-        # Push the synchronized pair to the main thread
-        if not display_queue.full():
-            display_queue.put((frame, state))
-
+# **************************** Receiver Callbacks *********************
 def callback_new_video(frame, pts):
     # if not display_queue.full():
     #     display_queue.put((frame, latest_pose))
     display_frame[0] = frame
-    # cv2.imshow("Robot Stream", frame)
 
 def callback_new_pose(pose):
     """Callback triggered when a new telemetry JSON string arrives."""
@@ -79,34 +57,52 @@ pose_receiver = PoseReceiver(callback=callback_new_pose)
 video_receiver = GIVideoReceiver(callback=callback_new_video, camera=camera)
 # **********************************************************************
 
-def main():
+def main(save_point_cloud=False, save_file_path="example.npz"):
+    boot = True
     try:
         while True:
+            if boot:
+                print("Warming up video receiver")
+                time.sleep(10)
+                boot = False
             # Block and wait for a synchronized pair from the GStreamer callbacks
             frame = display_frame[0]
             pose = latest_pose[0]
             
-            # Extract your synchronized variables
-            robot_x = pose.get("x", 0.0)
-            robot_y = pose.get("y", 0.0)
-            robot_theta = pose.get("theta", 0.0)
-
-            text = f"Synced -> X: {robot_x:.2f} | Y: {robot_y:.2f} | T: {robot_theta:.2f}"
-            cv2.putText(frame, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.imshow("Robot Stream (Laptop End)", frame)
             
-            # Press 'q' to quit
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            with robot.mutex_lock:
+                robot.set_robot_pose(pose["x"], pose["y"], pose["theta"])
+            
+            rel_depth = predictor.infer(frame)
+            fsc.scale_correction(rel_depth)
+            metric_depth = fsc.relative_to_metric(rel_depth)
+
+            pcd_cc = pcd_processor.proj_pcd_cc(metric_depth)
+            pcd_wc = pcd_processor.pcd_camera_to_world(pcd_cc)
+            if save_point_cloud:
+                pcd_collection.append(pcd_wc)
+            
+            # pcd.points = o3d.utility.Vector3dVector(pcd_wc)
+            # axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+            # o3d.visualization.draw_geometries([pcd, axes])
+
+
             time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Stopping...")
+        if (save_point_cloud):
+            script_path = Path(__file__).resolve()
+            project_root = script_path.parents[2]  # Goes up two levels from scripts/
+            output = project_root / "data" / "point_cloud" / save_file_path
+            combined_pcd = np.vstack(pcd_collection) #combine into (M, 3) nparray
+            unique_pcd = np.unique(combined_pcd, axis=0)
+            np.savez_compressed(output, points=unique_pcd)
+
     finally:
         # pipeline.set_state(Gst.State.NULL)
         pose_receiver.stop()
         video_receiver.release()
-        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()

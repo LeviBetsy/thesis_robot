@@ -28,9 +28,11 @@ class PointCloudProcessor:
         # Extract principal point (optical center)
         self.cx = intrinsic[0, 2]
         self.cy = intrinsic[1, 2]
+
+        self.ground_Z = 0.05
     
 
-    def proj_pcd_cc(self, Z):
+    def proj_pcd_cc(self, Z, delete_ground=True):
         """
         Converts a 2D NumPy array of metric depth (Z) into a point cloud in CAMERA COORDINATE
         
@@ -48,6 +50,9 @@ class PointCloudProcessor:
         Y = -(v_valid - self.cy) * Z_valid / self.fy #negative because camera space grow downward while pointcloud grow up
         
         ret = np.stack((X, Z_valid, Y), axis=-1) # camera's z is robot coordinate y and vice versa
+        if delete_ground: 
+            mask = ret[:, 2] >= self.ground_Z
+            return ret[mask]
         return ret
     
     def pcd_camera_to_robot(self, pcd_cc: np.ndarray) -> np.ndarray:
@@ -60,6 +65,21 @@ class PointCloudProcessor:
         """
         pcd_rc = (pcd_cc @ self.robot.cam_R.T) + self.robot.cam_t
         return pcd_rc
+
+    def pcd_camera_to_world(self, pcd_cc: np.ndarray) -> np.ndarray:
+        pcd_rc = (pcd_cc @ self.robot.cam_R.T) + self.robot.cam_t
+
+        t_world = np.array([self.robot.x, self.robot.y, 0.0])
+        cos_t = np.cos(self.robot.theta)
+        sin_t = np.sin(self.robot.theta)
+        
+        R_world = np.array([
+            [cos_t, -sin_t, 0.0],
+            [sin_t,  cos_t, 0.0],
+            [0.0,    0.0,   1.0]
+        ])
+        pcd_wc = (pcd_rc @ R_world.T) + t_world
+        return pcd_wc
     
     def average_floor_z(self, pcd_rc: np.ndarray) -> float:
         return np.mean(pcd_rc[:, 2])
