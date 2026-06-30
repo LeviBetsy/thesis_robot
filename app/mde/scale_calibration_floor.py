@@ -3,41 +3,41 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RidgeCV, Ridge
 import time
-import cv2
+import cv2 
+import math
 from scipy.optimize import curve_fit
 
 class FloorScaleCorrection:
-    def __init__(self, gt_z_file):
+    def __init__(self, gt_z_file_path):
         script_path = Path(__file__).resolve()
         self.project_root = script_path.parents[2]  # Goes up two levels from scripts/
-        self.floor_pixels, self.z_real = self.read_gt_floor_z(gt_z_file)
-        #initially s1 and s2 is 0 and changes for each frame
-        self.s1, self.s2 = 0, 0
-        self.a, self.b, self.c = 0, 0, 0 
-        self.d_rel = np.zeros((480, 640))
+        floor_pixels, z_real = self.read_gt_floor_z(gt_z_file_path)
+        inv_z_points = 1.0 / np.array(z_real) # inverse groudtruth metric (==relative) depth of samppled floor pixels
+        stacked_floor = np.column_stack((floor_pixels, inv_z_points))
 
-    def read_depthfile(self, depth_map_file):
-        # Reading relative depth map from .bin file
-        depth_map_dir = self.project_root / "data" / "depth_map"
-        depth_map = Path(str(depth_map_dir / depth_map_file))
+        self.group_n = 8
+        sort_idx = np.argsort(stacked_floor[:, 1])
+        sorted_floor_px = stacked_floor[sort_idx]
+        #floor_lst is list len(8) of np.array of shape (6,3) for each floor pixels
+        # floor_lst[0] is np.array(6,(x,y,inv_z))
+        # floor_lst[0] shows the row closest to the camera and opposite for floor_lst[7] 
+        self.floor_lst = np.split(sorted_floor_px, self.group_n, axis=0)[::-1] 
 
-        if depth_map.is_file():
-            width, height = 640,480
-            depth_data = np.fromfile(depth_map, dtype=np.float32).reshape((height, width))
-            return depth_data
-            # Safe to read/process the file here
-        else:
-            raise Exception(f"File {depth_map} does not exist")
+        #filter relative depth smaller than min_calibrated_rel
+        self.min_calibrated_rel = 0 #default min_calibrated_rel, further away points == smaller relative distance
+        self.max_calibrated_rel = 100
 
-    def read_gt_floor_z(self, gt_z_file):
+        self.fits = [(0,0)]*(self.group_n - 1) # definition for linear fit for each segment
+        self.segment_mins = [0]*(self.group_n - 1) # the smallest d_rel bound of each segment
+
+    def read_gt_floor_z(self, gt_z_file_path) -> tuple[np.ndarray, np.ndarray]:
         # Reading ground truth z for points on the floor 
         config_dir = self.project_root / "config"
-        z_file = Path(str(config_dir / f"{gt_z_file}.npz"))
+        z_file = Path(str(config_dir / gt_z_file_path))
         data = np.load(z_file)
-        #Extract the arrays using the keys they were saved with
-        return data['cornersOrg'], data['z_real'].squeeze()
+        return data['cornersOrg'], data['z_real'].squeeze() #squeze zreal because it is shape (N, 1)
 
-    def plot_scale_correction(self, plot_file, A, b, graph_type):
+    def plot_scale_correction(self, plot_file, A, b):
         plot_dir = self.project_root / "data" / "plot"
         plot_path = Path(str(plot_dir / f"{plot_file}.jpg"))
         # Create figure and axis using subplots for a clean layout
@@ -45,17 +45,11 @@ class FloorScaleCorrection:
         
         # Scatter plot for the raw data points only
         ax.scatter(A, b, alpha=0.6, color='blue', edgecolors='none', s=20)
-        # x space
         x_line = np.linspace(A.min(), A.max(), 100)
 
-
-        if graph_type == "poly":
-            y_line = self.a * (x_line**2) + self.b * x_line + self.c
-        elif graph_type == "exponential":
-            y_line = self.a * np.exp(-self.b * x_line) + self.c
-        else:
-            y_line = self.s1 * x_line + self.s2
-        
+        # y_line = self.s1 * x_line + self.s2
+        y_line = self.a * math.e**(self.b * (x_line - self.min_calibrated_rel)) + self.c
+        # y_line = self.a * (x_line**2) + self.b * x_line + self.c        
 
         # Plotting
         ax.plot(x_line, y_line, color='red', linewidth=2)
@@ -69,154 +63,61 @@ class FloorScaleCorrection:
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         print(f"Plot successfully saved to {plot_path}")
 
-    '''
-    output the s1, s2 arguments for the linear fit to convert relative depth to absolute depth
-    depth_map_file is most recent relative reading of the camera
-    '''
-    def scale_correction_ridge_reg(self, depthmap_file, plot=False, plot_file="", fit_style = "linear"): 
-        # Reading Data File
-        self.d_rel = self.read_depthfile(f"{depthmap_file}.bin")
+    def scale_calibration(self, d_rel, plot=False, plot_file=""): 
+        # Perform grouping of cluster close to each other for segmeneted regression
+        groupings = []
+        for i in range(self.group_n): #group_n groups ==> group_n - 1 linear line
+            x_coords = self.floor_lst[i][:, 0].astype(int)
+            y_coords = self.floor_lst[i][:, 1].astype(int)
+            inv_z = self.floor_lst[i][:, 2] #shape (6,)
+            rel_depth = d_rel[y_coords, x_coords] #shape (6,)
+            rel_inv = np.column_stack((rel_depth, inv_z)) #shape (6,2)
+            if i < self.group_n - 1:
+                self.segment_mins[i] = rel_depth.min()
+                groupings.append(rel_inv) # prevent appending trailing lonely group
+            if i > 0:
+                groupings[i-1] = np.vstack((groupings[i-1], rel_inv)) # this group is stacked with previous group
+        groupings = [(i, groupings[i]) for i in range(self.group_n - 1)]
 
-        # *********************** Data Collection **********************
-        floor_pixels_arr = np.array(self.floor_pixels)
-        x_coords = np.round(floor_pixels_arr[:, 0]).astype(int)
-        y_coords = np.round(floor_pixels_arr[:, 1]).astype(int)
+        # Intial Filter to make sure only floor pixels are used for calculation
+        # ..... filters ..... TODO
+        # for each of the 7 segment there is a tuple of (i, nparray).
+        # np array of shape (12,2)
+        # after the filtering, there might be N segments N <= 7
+        # each with tuple (i,nparray) have an np array of (M,2) with M <= 12
+        # but we would get min_calibrated_rel for later mask
+        # thus self.segment_mins though not updated, does not matter
+        # because we will filter it before even looking up with self.segment_mins
+        # ********************************************
+        self.min_calibrated_rel = groupings[0][1][:, 0].max() #grouping 0 is closest points => max d_rel
+        self.max_calibrated_rel = groupings[-1][1][:, 0].min() #grouping n is furthest points => min d_rel
 
-        drel_points = self.d_rel[y_coords, x_coords]
-        inv_z_points = 1.0 / np.array(self.z_real)
-        #**************************************************************
+        for i in range(len(groupings)):
+            X = groupings[i][1][:, 0].reshape(-1, 1)
+            y = groupings[i][1][:, 1]
+            ridge_model = Ridge(alpha=1.0) # alpha=0 is standard linear regression. Higher alpha = more penalty.
+            ridge_model.fit(X, y)
+            self.fits[groupings[i][0]] = ridge_model.coef_[0], ridge_model.intercept_
+        
+        # #Plot
+        # if plot:
+        #     self.plot_scale_correction(plot_file, valid_drel, self.inv_z_points)
 
-        if fit_style == "poly":
-            #********************** Polynomial Regression *****************
-            # Fits a 2nd-degree polynomial: z^-1 = a * (d_rel)^2 + b * (d_rel) + c
-            
-            # drel_points is x, inv_z_points is y, 2 is the polynomial degree
-            coefficients = np.polyfit(drel_points, inv_z_points, 2)
-            
-            # polyfit returns coefficients in descending order of power: [a, b, c]
-            # We assign these to new class attributes to replace self.s1 and self.s2
-            self.a = float(coefficients[0])
-            self.b = float(coefficients[1])
-            self.c = float(coefficients[2])
-            print(f"Coefficients (a, b, c): {self.a}, {self.b}, {self.c}")
-            #**************************************************************
-        elif fit_style == "exponential":
-            #********************** Exponential Regression *****************
-            def exp_func(d, a, b, c):
-                return a * np.exp(-b*d) + c
-            initial_guess = [10.0, 1.0, 0.0]
-            
-            #fit the curve
-            popt, pcov = curve_fit(exp_func, drel_points, inv_z_points)
-            self.a = float(popt[0])
-            self.b = float(popt[1])
-            self.c = float(popt[2])
-            print(f"Coefficients (a, b, c): {self.a}, {self.b}, {self.c}")
-            #**************************************************************
-        else:
-            #********************** Ridge Regression **********************
-            #Following CeRlp paper for notation
-            ones_column = np.ones_like(drel_points)
-            A = np.column_stack((drel_points, ones_column))
-            b = inv_z_points
-
-            # # With cross validation
-            # lambdas_to_test = np.logspace(-6, 6, 13) 
-            # # cv=5 means 5-fold cross-validation
-            # ridge_cv = RidgeCV(alphas=lambdas_to_test, fit_intercept=False, cv=5)
-            # ridge_cv.fit(A, b)
-            # optimal_lambda = ridge_cv.alpha_
-            # x = ridge_cv.coef_
-            # print(f"Optimal Lambda: {optimal_lambda}")
-
-            # Without cross validation
-            ridge = Ridge(alpha=0.001, fit_intercept=False) #without cross_validation
-            ridge.fit(A,b)
-            x=ridge.coef_
-            self.s1, self.s2 = float(x[0].item()), float(x[1].item())
-            #**************************************************************
-
-        #Plot
-        if plot:
-            self.plot_scale_correction(plot_file, drel_points, inv_z_points, fit_style)
     
-    '''
-    pixel must be (x,y) where x, y are ints
-    return the metrix depth of a pixel in float
-    '''
-    def predict_metric(self, pixel, fit_style="linear") -> float:
-        x, y = pixel
-        #TODO assume that self.d_rel contains the most updated image
-        F = float(self.d_rel[y, x]) #predicted relative depth
+    def relative_to_metric(self, d_rel: np.array) -> np.array:
+        # TODO: not done
+        valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
+        valid_vals = d_rel[valid_mask]
 
-        if fit_style == "poly":
-            ret = 1.0/(self.a * (F ** 2) + self.b * F + self.c)
-        elif fit_style == "exponential":
-            ret = 1.0/(self.a * np.exp(-self.b*F) + self.c)
-        else:
-            ret = 1.0/(self.s1*F + self.s2)
-        return ret
+        matching_fit = np.searchsorted(self.segments, valid_vals, side='right') - 1
     
-    def annotate_floor_pixels(self, image_file, plot_file="annotated_floor", fit_style="linear"):
-        """
-        Loads an image, iterates through floor pixels, annotates them with circles, 
-        and labels each with the output of predict_metric(x, y).
-        """
-        ref_dir = self.project_root / "data" / "test"
-        cb_path = ref_dir / f"{image_file}.jpg" # adjust extension if using .jpg
+        result = np.full_like(d_rel, -1.0, dtype=float)
         
-        if not cb_path.is_file():
-            raise FileNotFoundError(f"Image file {cb_path} does not exist.")
-            
-        # Load image using OpenCV
-        img = cv2.imread(str(cb_path))
-        if img is None:
-            raise FileNotFoundError("no file")
+        valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
+        valid_vals = d_rel[valid_mask]
+        result[valid_mask] = 1.0 / (self.a* math.e**(self.b*(valid_vals - self.min_calibrated_rel)) + self.c)
         
-        floor_pixels_arr = np.array(self.floor_pixels)
-        new_points = np.array([[354, 100],[354,150], [354,125], [354,63]])
-        floor_pixels_arr = np.vstack((floor_pixels_arr, new_points))
-        
-        for pixel in floor_pixels_arr:
-            # Round coordinates to the nearest integer for pixel mapping
-            x = int(np.round(pixel[0]))
-            y = int(np.round(pixel[1]))
-            
-            # Ensure the coordinates actually fall within your image boundaries to prevent crashing
-            if 0 <= x < img.shape[1] and 0 <= y < img.shape[0]:
-                # Get the prediction for this specific pixel
-                metric_val = self.predict_metric((x, y), fit_style)
-                
-                # Format the text to 3 decimal places
-                text = f"{metric_val:.3f}"
-                
-                # Draw a small solid dot/circle at the rounded (x, y) location
-                # cv uses (B, G, R) color format. (0, 255, 0) is pure green.
-                cv2.circle(img, (x, y), radius=3, color=(0, 255, 0), thickness=-1)
-                
-                # Annotate the numerical text slightly offset (+5 pixels) from the dot
-                cv2.putText(
-                    img, 
-                    text, 
-                    (x + 5, y - 5), 
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                    fontScale=0.3, 
-                    color=(0, 0, 255), # Red text
-                    thickness=1,
-                    lineType=cv2.LINE_AA
-                )
-
-        # Save the annotated image out to your plots/output directory
-        output_dir = self.project_root / "data" / "output"
-        output_path = output_dir / f"{plot_file}.jpg"
-        
-        cv2.imwrite(str(output_path), img)
-        print(f"Annotated image successfully saved to {output_path}")
-
-
-        
-if __name__=="__main__":
-    fsc = FloorScaleCorrection("z_real_ref6")
-    fit_type = "poly"
-    fsc.scale_correction_ridge_reg("DAV2_cube60_relative_depthmap", True, f"DAV2_floor_sample_{fit_type}", fit_type)
-    # fsc.annotate_floor_pixels("cube_60cm", "DAV2_cube60_annotated_exponential", fit_type)
+        return result
+    
+if __name__ == "__main__":
+    fsc = FloorScaleCorrection("z_real.npz")

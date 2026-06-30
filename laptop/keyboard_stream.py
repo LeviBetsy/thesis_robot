@@ -37,7 +37,7 @@ def send_to_pi(inst, left, right):
         try:
             sock.sendall(msg.encode('utf-8'))
             current_cmd = (inst, left, right)
-            print(f"Sent: {msg.strip()}")
+            # print(f"Sent: {msg.strip()}")
         except Exception as e:
             print(f"Send failed: {e}")
 

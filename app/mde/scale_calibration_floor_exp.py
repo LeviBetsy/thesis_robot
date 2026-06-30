@@ -21,6 +21,7 @@ class FloorScaleCorrection:
 
         #filter relative depth smaller than min_calibrated_rel
         self.min_calibrated_rel = 0 #default min_calibrated_rel, further away points == smaller relative distance
+        self.max_calibrated_rel = 100
     
 
     def read_gt_floor_z(self, gt_z_file):
@@ -58,34 +59,11 @@ class FloorScaleCorrection:
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         print(f"Plot successfully saved to {plot_path}")
 
-    '''
-    depth_map_file is most recent relative reading of the camera
-    '''
     def scale_correction(self, d_rel, plot=False, plot_file=""): 
         drel_points = d_rel[self.y_coords, self.x_coords]
         self.min_calibrated_rel = drel_points.min()
         self.max_calibrated_rel = drel_points.max()
 
-
-        # #****************** Ridge Regression ****************
-        # ones_column = np.ones_like(drel_points)
-        # A = np.column_stack((drel_points, ones_column))
-        # b = self.inv_z_points
-
-        # # # With cross validation
-        # # lambdas_to_test = np.logspace(-6, 6, 13) 
-        # # # cv=5 means 5-fold cross-validation
-        # # ridge_cv = RidgeCV(alphas=lambdas_to_test, fit_intercept=False, cv=5)
-        # # ridge_cv2.fit(A, b)
-        # # optimal_lambda = ridge_cv2.alpha_
-        # # x = ridge_cv2.coef_
-        # # print(f"Optimal Lambda: {optimal_lambda}")
-
-        # # Without cross validation
-        # ridge = Ridge(alpha=0.001, fit_intercept=False) #without cross_validation
-        # ridge.fit(A,b)
-        # x=ridge.coef_
-        # self.s1, self.s2 = float(x[0].item()), float(x[1].item())
         
         #********************** Exponential *****************
         def exp_model(x, a, b, c):
@@ -105,16 +83,6 @@ class FloorScaleCorrection:
         )
 
         self.a, self.b, self.c = coefficients
-        # #********************** Polynomial Regression *****************
-        # # drel_points is x, inv_z_points is y, 2 is the polynomial degree
-        # coefficients = np.polyfit(drel_points, self.inv_z_points, 2)
-        
-        # # polyfit returns coefficients in descending order of power: [a, b, c]
-        # self.a = float(coefficients[0])
-        # self.b = float(coefficients[1])
-        # self.c = float(coefficients[2])
-        # print(f"[Polynomial Params] a: {self.a:.6f} | b: {self.b:.6f} | c: {self.c:.6f}")
-        # #**************************************************************
         #Plot
         if plot:
             self.plot_scale_correction(plot_file, drel_points, self.inv_z_points)
@@ -125,12 +93,7 @@ class FloorScaleCorrection:
         
         valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
         valid_vals = d_rel[valid_mask]
-
-
         result[valid_mask] = 1.0 / (self.a* math.e**(self.b*(valid_vals - self.min_calibrated_rel)) + self.c)
-
-
-        # result[self.y_coords, self.x_coords] = 1.0/ (self.a*math.e**(self.b*(d_rel[self.y_coords, self.x_coords]-self.min_calibrated_rel)) + self.c)
         
         return result
     
