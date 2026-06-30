@@ -30,7 +30,7 @@ def main(imshow=False):
     rel_depth_map = np.load("data/test/rel_depth_test.npz")['infer']
 
 
-    fsc.scale_calibration(rel_depth_map)
+    fsc.scale_calibration(rel_depth_map, True, "helPPPPP")
     # metric_map = fsc.relative_to_metric(rel_depth_map)
 
     # point_cloud_cc = pcd_processor.proj_pcd_cc(metric_map)
