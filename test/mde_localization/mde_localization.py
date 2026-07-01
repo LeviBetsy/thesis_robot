@@ -38,7 +38,11 @@ controller.start() #THREAD 3: start thread to listen for keyboard and sending co
 streamer = PoseVideoStreamer()
 pose = {"x": 0, "y": 0, "theta": 0}
 #Main loop
+camera = robot.camera
 cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera.w)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.h)
+# cap.set(cv2.CAP_PROP_FPS, streamer.fps)
 try:
     while True:
         loop_start = time.time()

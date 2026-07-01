@@ -14,6 +14,7 @@ class PoseVideoStreamer:
         self.port = port
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
+        self.socket.setsockopt(zmq.SNDHWM, 2)
         self.socket.bind(f"tcp://*:{self.port}")
         print(f"ZeroMQ streamer bound to tcp://*:{self.port}")
         self.fps = fps

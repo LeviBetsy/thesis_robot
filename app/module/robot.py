@@ -38,4 +38,4 @@ class Robot:
     def set_robot_pose(self, x, y, theta):
         self.x = x
         self.y = y
-        self.theta = theta
+        self.theta = theta % (2*math.pi)
