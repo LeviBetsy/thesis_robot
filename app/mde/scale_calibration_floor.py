@@ -26,7 +26,7 @@ class FloorScaleCorrection:
         self.min_calibrated_rel = 0 #default min_calibrated_rel, further away points == smaller relative distance
         self.max_calibrated_rel = 100
 
-        self.fits = [(0,0)]*(self.group_n - 1) # definition for linear fit for each segment
+        self.fits = np.zeros((self.group_n - 1, 2)) # definition for linear fit for each segment (N, 2)
         self.segment_mins = [0]*(self.group_n - 1) # the smallest d_rel bound of each segment
 
     def read_gt_floor_z(self, gt_z_file_path) -> tuple[np.ndarray, np.ndarray]:
@@ -101,11 +101,12 @@ class FloorScaleCorrection:
         # but we would get min_calibrated_rel for later mask
         # thus self.segment_mins though not updated, does not matter
         # because we will filter it before even looking up with self.segment_mins
-        # TODO: filter less than 2 groupings
+        # TODO: don't filter blocks with less than 2 yet, filter happens in groupings
         # ********************************************
         filtered_blocks = rel_blocks #TODO: 
         
 
+        # groupings are tuple of (i, group_i) where group_i is block_i U block_i+1
         groupings = [
             (i, np.vstack((curr_block, next_block)))
             for i, (curr_block, next_block) in enumerate(zip(filtered_blocks[:-1], filtered_blocks[1:]))
@@ -119,9 +120,9 @@ class FloorScaleCorrection:
             idx, data_points = groupings[i][0], groupings[i][1]
             X = data_points[:, 0].reshape(-1, 1)
             y = data_points[:, 1]
-            ridge_model = Ridge(alpha=0.001) # alpha=0 is standard linear regression. Higher alpha = more penalty.
+            ridge_model = Ridge(alpha=0.001) 
             ridge_model.fit(X, y)
-            self.fits[idx] = ridge_model.coef_[0], ridge_model.intercept_
+            self.fits[idx] = [ridge_model.coef_[0], ridge_model.intercept_] # change the fit
         
         #Plot
         if plot:
@@ -131,16 +132,14 @@ class FloorScaleCorrection:
     def relative_to_metric(self, d_rel: np.array) -> np.array:
         # TODO: not done
         valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
-        valid_vals = d_rel[valid_mask]
+        valid_vals = d_rel[valid_mask] # np array of points within calibration
 
-        matching_fit = np.searchsorted(self.segments, valid_vals, side='right') - 1
-    
+        fit_idx = np.searchsorted(self.segment_mins, valid_vals, side='right') - 1
+        slopes = self.fits[fit_idx, 0]
+        intercepts = self.fits[fit_idx, 1]
+
         result = np.full_like(d_rel, -1.0, dtype=float)
-        
-        valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
-        valid_vals = d_rel[valid_mask]
-        result[valid_mask] = 1.0 / (self.a* math.e**(self.b*(valid_vals - self.min_calibrated_rel)) + self.c)
-        
+        result[valid_mask] = 1 / (slopes * valid_vals + intercepts)
         return result
     
 if __name__ == "__main__":
