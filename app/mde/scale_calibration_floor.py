@@ -12,15 +12,15 @@ class FloorScaleCorrection:
     def __init__(self, gt_z_file_path):
         script_path = Path(__file__).resolve()
         self.project_root = script_path.parents[2]  # Goes up two levels from scripts/
-        floor_pixels, z_real = self.read_gt_floor_z(gt_z_file_path)
+        self.floor_pixels, z_real = self.read_gt_floor_z(gt_z_file_path)
         inv_z_points = 1.0 / np.array(z_real) # inverse groudtruth metric (==relative) depth of samppled floor pixels
 
-        stacked_floor = np.column_stack((floor_pixels, inv_z_points)) #shape (48,3)
+        stacked_floor = np.column_stack((self.floor_pixels, inv_z_points)) #shape (48,3)
         sort_idx = np.argsort(stacked_floor[:, 1])
         sorted_floor_px = stacked_floor[sort_idx]
         # floor_lst[0] shows the row furthest to the camera and opposite for floor_lst[7] 
         self.group_n = 8
-        self.pixel_blocks = np.vsplit(sorted_floor_px, self.group_n) #returns a lst
+        self.pixel_blocks = np.vsplit(sorted_floor_px, self.group_n) #returns a lst of 7 nparray
 
         #filter relative depth smaller than min_calibrated_rel
         self.min_calibrated_rel = 0 #default min_calibrated_rel, further away points == smaller relative distance
@@ -141,6 +141,31 @@ class FloorScaleCorrection:
         result = np.full_like(d_rel, -1.0, dtype=float)
         result[valid_mask] = 1 / (slopes * valid_vals + intercepts)
         return result
+    
+    def annotate_floor_pixels(self, frame: np.ndarray, out_fpath: str):
+        ''' Takes in an image and annotate the floor pixels on that image 
+        and save the annotated image to data/floor_verificaiton/out_fpath'''
+        save_dir = self.project_root / "data" / "floor_verification"
+        # Ensure the directory exists
+        save_path = Path(str(save_dir / out_fpath))
+
+        annotated_img = frame.copy()
+    
+        # Define cosmetic parameters for the markers
+        color = (0, 0, 255)  # Red in BGR
+        radius = 5           # Size of the circle
+        thickness = -1       # -1 fills the circle completely
+        
+        # Loop through the paired coordinates and draw them
+        x_coords, y_coords = self.floor_pixels[:, 0].astype(int), self.floor_pixels[:, 1].astype(int)
+        print(x_coords)
+        for x, y in zip(x_coords, y_coords):
+            cv2.circle(annotated_img, (x, y), radius, color, thickness)
+            
+        success = cv2.imwrite(save_path, annotated_img)
+        print(save_path)
+        return annotated_img
+
     
 if __name__ == "__main__":
     fsc = FloorScaleCorrection("z_real.npz")
