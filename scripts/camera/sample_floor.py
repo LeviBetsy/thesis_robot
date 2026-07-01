@@ -16,13 +16,12 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-# Now you can use a clean absolute import
-from app.modules.camera.undistorter import ImageUndistorter
+from app.module.camera import Camera
 
 '''
 d_ref_img is the file name for an image of the checkerboard on the floor.
   the image must be in project_root/data/references
-  !!!!d_ref_img must be unprocessed and distorted!!!!
+  !!!!d_ref_img must be undistorted!!!!
 config_file is the .npz file storing the camera intrinsic matrix and distortion coefficients
   the config_file must be in project_root/config
 square_size is in meter
@@ -58,15 +57,17 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
     if (cornersFound):
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         cornersOrg = cv2.cornerSubPix(imgGray, cornersOrg, (11, 11), (-1, -1), criteria)
+        cornersOrg[7, 0, 0] = 252
+        cornersOrg[7, 0, 1] = 174
+        print(cornersOrg[7])
         if (showPics):
             cv2.drawChessboardCorners(imgBGR, (pattern_x, pattern_y), cornersOrg, cornersFound)
             cv2.imshow('Checkerboard Corners', imgBGR)
             cv2.waitKey(0)
         
         #************************** Solve Pnp *************************************
-        IU = ImageUndistorter(config_file)
-        undistorted = cv2.fisheye.undistortPoints(cornersOrg, IU.K, IU.D)
-        sucess, rvec, tvec = cv2.solvePnP(P_obj, undistorted, np.eye(3), None)
+        camera = Camera(config_file)
+        sucess, rvec, tvec = cv2.solvePnP(P_obj, cornersOrg, camera.K, None)
         tvec = tvec.flatten()
         R, _ = cv2.Rodrigues(rvec)
         P_cam = np.zeros((pattern_y*pattern_x, 3), dtype=np.float32)
@@ -111,7 +112,6 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
     else:
         raise Exception("cant find corners") 
 
-    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-  find_checker_metric("ref6.jpg", "fisheye_camera_calibration.npz", 0.0285, False)
+  find_checker_metric("undistort_ref6.png", "fisheye_calib.npz", 0.0285, False)
