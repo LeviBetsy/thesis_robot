@@ -51,25 +51,13 @@ class DepthAnythingPredictor:
 
     def infer(self, frame: np.ndarray):
         return self.model.infer_image(frame)
-
-    def infer_image(self, full_img_name: str):
-        """Run depth estimation on a single image in data/test."""
-
-        test_dir = self.project_root / "data" / "test"
-        img_path = test_dir / str(full_img_name)
-
-
-        image = cv2.imread(img_path)
-
-        depth = self.model.infer_image(image)  # float32 depth tensor
-        return depth
     
-    def infer_image_save(self, full_img_name):
-        depth_array = self.infer_image(full_img_name)
+    def infer_image_save(self, frame: np.ndarray):
+        depth_array = self.infer(frame)
 
         output_dir = self.project_root / "data" / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_img_path = output_dir / f"DAV2_{full_img_name}"
+        output_img_path = output_dir / f"DAV2_AHHHHHHHH.jpg"
         colored_image = self.colorize(depth_array)
         plt.imsave(output_img_path, colored_image)
 

@@ -16,11 +16,6 @@ from app.stream.zmq_stream import PoseVideoReceiver
 # **********************************************************************
 
 # ***************************** Initialize *****************************
-
-# Initialize GStreamer
-if not Gst.is_initialized():
-    Gst.init(sys.argv)
-
 # Robot
 robot = Robot("fisheye_calib.npz")
 camera = robot.camera

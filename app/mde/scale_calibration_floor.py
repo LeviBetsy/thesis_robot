@@ -26,9 +26,6 @@ class FloorScaleCorrection:
         self.min_calibrated_rel = 0 #default min_calibrated_rel, further away points == smaller relative distance
         self.max_calibrated_rel = 100
 
-        self.fits = np.zeros((self.group_n - 1, 2)) # definition for linear fit for each segment (N, 2)
-        self.segment_mins = [0]*(self.group_n - 1) # the smallest d_rel bound of each segment
-
     def read_gt_floor_z(self, gt_z_file_path) -> tuple[np.ndarray, np.ndarray]:
         # Reading ground truth z for points on the floor 
         config_dir = self.project_root / "config"
@@ -36,21 +33,26 @@ class FloorScaleCorrection:
         data = np.load(z_file)
         return data['cornersOrg'], data['z_real'].squeeze() #squeze zreal because it is shape (N, 1)
 
-    def plot_scale_calibration(self, plot_file, points):
+    def plot_scale_calibration(self, plot_fpath, blocks):
         plot_dir = self.project_root / "data" / "plot"
         # Ensure the directory exists
         plot_dir.mkdir(parents=True, exist_ok=True) 
-        plot_path = Path(str(plot_dir / f"{plot_file}.jpg"))
-        
-        # Extract x and y from the (N, 2) numpy array
-        x_data = points[:, 0]
-        y_data = points[:, 1]
-        
+        plot_path = Path(str(plot_dir / plot_fpath))
         # Create figure and axis
         fig, ax = plt.subplots(figsize=(8, 6))
+
+        # Extract x and y from the (N, 2) numpy array
+        num_blocks = len(blocks)
+        # 'turbo' or 'gist_rainbow' offer a highly vibrant, full-spectrum range of colors
+        cmap = plt.get_cmap('turbo')
+        for i, points in enumerate(blocks):
+            x_data = points[:, 0]
+            y_data = points[:, 1]
+
+            block_color = cmap(i / max(1, num_blocks - 1))
         
-        # Scatter plot for the raw data points
-        ax.scatter(x_data, y_data, alpha=0.6, color='blue', edgecolors='none', s=20)
+            # Scatter plot for the raw data points
+            ax.scatter(x_data, y_data, alpha=0.9, color=block_color, edgecolors='none', s=20)
 
         # Plot piecewise linear segments
         for i, (a, b) in enumerate(self.fits):
@@ -67,7 +69,7 @@ class FloorScaleCorrection:
             y_line = a * x_line + b
             
             # Plot the segment
-            ax.plot(x_line, y_line, color='red', linewidth=2)
+            ax.plot(x_line, y_line, color='red', linewidth=2, alpha = 0.5)
 
         # Format axes using LaTeX notation
         ax.set_xlabel(r'Relative Depth ($d_{rel}$)', fontsize=12)
@@ -88,45 +90,48 @@ class FloorScaleCorrection:
             x_coords, y_coords = coords[:, 0].astype(int), coords[:, 1].astype(int)
             inv_z = coords[:, 2] #shape (6,)
             rel_depth = d_rel[y_coords, x_coords] #shape (6,)
-            if i < self.group_n - 1:
-                self.segment_mins[i] = rel_depth.min()
             rel_blocks.append(np.column_stack((rel_depth, inv_z)))
+            #OH FUCK TODO
+            #segment satisfying min_calibrated_depth means you can still get into self.segment_mins
 
-        # Intial Filter to make sure only floor pixels are used for calculation
-        # ..... filters ..... TODO
-        # for each of the 7 segment there is a tuple of (i, nparray).
-        # np array of shape (12,2)
-        # after the filtering, there might be N segments N <= 7
-        # each with tuple (i,nparray) have an np array of (M,2) with M <= 12
-        # but we would get min_calibrated_rel for later mask
-        # thus self.segment_mins though not updated, does not matter
-        # because we will filter it before even looking up with self.segment_mins
-        # TODO: don't filter blocks with less than 2 yet, filter happens in groupings
-        # ********************************************
-        filtered_blocks = rel_blocks #TODO: 
+        # Filter to make sure only floor pixels are used for calculation
+        filtered_blocks = rel_blocks.copy()
+        for i in range(len(filtered_blocks) - 2, -1, -1): #loop from 2nd closest row filtered_blocks[n-2] to furthest row filtered_blocks[0]
+            keep_mask = filtered_blocks[i][:,0] < filtered_blocks[i+1][:,0] #further row must have rel_depth less than closer row
+            if not keep_mask.all(): #if a single point is not a floor pixel, filter all further point to be invalid (inclusive)
+                for k in range(i + 1):
+                    filtered_blocks[k] = filtered_blocks[k][keep_mask]
         
 
         # groupings are tuple of (i, group_i) where group_i is block_i U block_i+1
-        groupings = [
-            (i, np.vstack((curr_block, next_block)))
-            for i, (curr_block, next_block) in enumerate(zip(filtered_blocks[:-1], filtered_blocks[1:]))
-        ] #grouping first block with next block
-        groupings = [(i, group) for (i,group) in groupings if group.shape[0] >= 2] #keep groups with > 1 datapoints for regression
-        self.min_calibrated_rel = groupings[0][1][:, 0].min() #grouping 0 is furthest points => min d_rel
-        self.max_calibrated_rel = groupings[-1][1][:, 0].max() #grouping n is closest points => max d_rel
-
+        groupings = [np.vstack((curr_block, next_block))
+            for (curr_block, next_block) in zip(filtered_blocks[:-1], filtered_blocks[1:])
+            if len(curr_block) > 0 and len(next_block) > 0
+        ] #grouping first block with next block, groupingmust be made of 2 blocks that are not empty or it is not valid
+        n_segment = len(groupings)
+        if n_segment > 0:
+            self.min_calibrated_rel = groupings[0][:, 0].min() #grouping 0 is furthest points => min d_rel
+            self.max_calibrated_rel = groupings[-1][:, 0].max() #grouping n is closest points => max d_rel
+        else: #all calibration is invalid (likely because too close to obstacle)
+            print("all calibration invalid (likely due to obstacle being too close)")
+            self.min_calibrated_rel = 100
+            self.max_calibrated_rel = 0
         
-        for i in range(len(groupings)):
-            idx, data_points = groupings[i][0], groupings[i][1]
+        self.fits = np.zeros((n_segment, 2))
+        self.segment_mins = [0]*(n_segment)
+        
+        for i in range(n_segment):
+            data_points = groupings[i]
+            self.segment_mins[i] = data_points[:,0].min()
             X = data_points[:, 0].reshape(-1, 1)
             y = data_points[:, 1]
             ridge_model = Ridge(alpha=0.001) 
             ridge_model.fit(X, y)
-            self.fits[idx] = [ridge_model.coef_[0], ridge_model.intercept_] # change the fit
+            self.fits[i] = [ridge_model.coef_[0], ridge_model.intercept_] # change the fit
         
         #Plot
         if plot:
-            self.plot_scale_calibration(plot_file, np.vstack(rel_blocks))
+            self.plot_scale_calibration(plot_file, filtered_blocks)
 
     
     def relative_to_metric(self, d_rel: np.array) -> np.array:
@@ -152,15 +157,19 @@ class FloorScaleCorrection:
         annotated_img = frame.copy()
     
         # Define cosmetic parameters for the markers
-        color = (0, 0, 255)  # Red in BGR
-        radius = 5           # Size of the circle
-        thickness = -1       # -1 fills the circle completely
+        circle_color = (0, 0, 255)     # Red for the circle
+        text_color = (0, 255, 0)       # Green for the text
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.3
+        thickness = 1
         
-        # Loop through the paired coordinates and draw them
-        x_coords, y_coords = self.floor_pixels[:, 0].astype(int), self.floor_pixels[:, 1].astype(int)
-        print(x_coords)
-        for x, y in zip(x_coords, y_coords):
-            cv2.circle(annotated_img, (x, y), radius, color, thickness)
+        for block in self.pixel_blocks:
+            for x, y, z in block:
+                center = (int(x), int(y))
+                cv2.circle(annotated_img, center, radius=5, color=circle_color, thickness=-1)
+                # text = f"{(1/z):.2f}"
+                # text_position = (center[0] + 10, center[1] + 5)
+                # cv2.putText(annotated_img, text, text_position, font, font_scale, text_color, thickness, cv2.LINE_AA)
             
         success = cv2.imwrite(save_path, annotated_img)
         print(save_path)
