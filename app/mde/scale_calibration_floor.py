@@ -9,7 +9,7 @@ import math
 from scipy.optimize import curve_fit
 
 class FloorScaleCorrection:
-    def __init__(self, gt_z_file_path):
+    def __init__(self, gt_z_file_path, group_n):
         script_path = Path(__file__).resolve()
         self.project_root = script_path.parents[2]  # Goes up two levels from scripts/
         self.floor_pixels, z_real = self.read_gt_floor_z(gt_z_file_path)
@@ -19,7 +19,7 @@ class FloorScaleCorrection:
         sort_idx = np.argsort(stacked_floor[:, 1])
         sorted_floor_px = stacked_floor[sort_idx]
         # floor_lst[0] shows the row furthest to the camera and opposite for floor_lst[7] 
-        self.group_n = 8
+        self.group_n = group_n
         self.pixel_blocks = np.vsplit(sorted_floor_px, self.group_n) #returns a lst of 7 nparray
 
         #filter relative depth smaller than min_calibrated_rel
@@ -134,9 +134,11 @@ class FloorScaleCorrection:
             self.plot_scale_calibration(plot_file, filtered_blocks)
 
     
-    def relative_to_metric(self, d_rel: np.array) -> np.array:
-        # TODO: not done
-        valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
+    def relative_to_metric(self, d_rel: np.array, extrapolate= False) -> np.array:
+        if extrapolate:
+            valid_mask = (d_rel >= self.min_calibrated_rel)
+        else: 
+            valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
         valid_vals = d_rel[valid_mask] # np array of points within calibration
 
         fit_idx = np.searchsorted(self.segment_mins, valid_vals, side='right') - 1
@@ -147,7 +149,7 @@ class FloorScaleCorrection:
         result[valid_mask] = 1 / (slopes * valid_vals + intercepts)
         return result
     
-    def annotate_floor_pixels(self, frame: np.ndarray, out_fpath: str):
+    def annotate_floor_pixels(self, frame: np.ndarray, out_fpath: str, puttext=True):
         ''' Takes in an image and annotate the floor pixels on that image 
         and save the annotated image to data/floor_verificaiton/out_fpath'''
         save_dir = self.project_root / "data" / "floor_verification"
@@ -167,9 +169,10 @@ class FloorScaleCorrection:
             for x, y, z in block:
                 center = (int(x), int(y))
                 cv2.circle(annotated_img, center, radius=5, color=circle_color, thickness=-1)
-                # text = f"{(1/z):.2f}"
-                # text_position = (center[0] + 10, center[1] + 5)
-                # cv2.putText(annotated_img, text, text_position, font, font_scale, text_color, thickness, cv2.LINE_AA)
+                if puttext:
+                    text = f"{(1/z):.2f}"
+                    text_position = (center[0] + 10, center[1] + 5)
+                    cv2.putText(annotated_img, text, text_position, font, font_scale, text_color, thickness, cv2.LINE_AA)
             
         success = cv2.imwrite(save_path, annotated_img)
         print(save_path)
