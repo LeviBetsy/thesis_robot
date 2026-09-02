@@ -19,19 +19,20 @@ from app.stream.zmq_stream import PoseVideoStreamer
 
 
 #UART
-msp432_uart = MSP432Uart()
-msp432_uart.start_receiving() #THREAD 1: to listen to odometry data from MSP432 and fill buffer
+# msp432_uart = MSP432Uart()
+# msp432_uart.start_receiving() #THREAD 1: to listen to odometry data from MSP432 and fill buffer
 
 #Robot
 robot = Robot("fisheye_calib.npz")
+camera_module = robot.camera
 
-# #Localization
-loc = OdometryLocalization(robot=robot)
-loc.init_odometry_thread(msp432_uart) #THREAD 2: start thread to change localization using UART buffer
+# # #Localization
+# loc = OdometryLocalization(robot=robot)
+# loc.init_odometry_thread(msp432_uart) #THREAD 2: start thread to change localization using UART buffer
 
-#Keyboard Controller
-controller = RobotController(msp432_uart.send_command)
-controller.start() #THREAD 3: start thread to listen for keyboard and sending command to msp432
+# #Keyboard Controller
+# controller = RobotController(msp432_uart.send_command)
+# controller.start() #THREAD 3: start thread to listen for keyboard and sending command to msp432
 
 # ZeroMQ publisher for camera stream process
 # pose_streamer = PoseStreamer() #THREAD 4: thread to stream pose data
@@ -50,6 +51,8 @@ try:
         with robot.mutex_lock:
             pose = {"x": robot.x, "y": robot.y, "theta": robot.theta}
         ret, frame = cap.read()
+        frame = camera.undistort_fisheye(frame=frame)
+
         if not ret:
             print("Can't capture video frame")
             raise RuntimeError("Cant capture video frame")
@@ -66,5 +69,5 @@ except RuntimeError:
     print("Something went wrong, closing program")
 finally:
     streamer.stop()
-    msp432_uart.close()
-    controller.stop()
+    # msp432_uart.close()
+    # controller.stop()

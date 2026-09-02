@@ -1,7 +1,14 @@
 import cv2
 from pathlib import Path
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+from app.module.camera import Camera
+import time
 
 def take_picture():
+    camera = Camera("fisheye_calib.npz")
+
     script_path = Path(__file__).resolve()
     project_root = script_path.parents[2]  # Goes up two levels from scripts/
     output_dir = project_root / "data" / "references"
@@ -24,6 +31,7 @@ def take_picture():
 
     # 3. Initialize the camera (0 is usually the default built-in/USB webcam)
     cam = cv2.VideoCapture(0)
+    time.sleep(5)
     
     if not cam.isOpened():
         print("Error: Could not open camera.")
@@ -39,6 +47,7 @@ def take_picture():
         if not ret:
             print("Failed to grab frame.")
             break
+        frame = camera.undistort_fisheye(frame)
             
         # # Display the live stream in a window
         # cv2.imshow("Calibration Capture - Live Feed", frame)

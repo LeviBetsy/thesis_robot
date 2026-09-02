@@ -30,10 +30,38 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
     script_path = Path(__file__).resolve()
     project_root = script_path.parents[2]  # Goes up two levels from scripts/
     referenceDir = project_root / "data" / "references"
-    cboard_path = str(referenceDir / d_ref_img)
-    # Initialize
+    cboard_path = str(referenceDir / d_ref_img) + ".jpg"
+    
     pattern_x = 8
     pattern_y = 6
+
+    # Find Corners
+    imgBGR = cv2.imread(cboard_path)
+    imgGray = cv2.cvtColor(imgBGR, cv2.COLOR_BGR2GRAY)
+    
+    #cornersFound is true/false
+    cornersFound, cornersOrg = cv2.findChessboardCorners(imgGray, (pattern_x, pattern_y), None)
+    cornersOrg[7, 0, 0] = 228
+    cornersOrg[7, 0, 1] = 186
+
+    manualCorners = [[236, 171], [243, 158], [249, 147], [255,136], [261,127], [265,120], [269, 113], [272, 106],
+    [275, 171], [280, 158], [284, 147], [287.5, 136], [290, 128], [293, 119], [295.5, 113], [298.5, 106],
+    [314, 171], [316, 158], [317,146], [319,136], [320,128], [321,120], [322,112], [323, 106],
+    [353,171], [352,158], [351,146], [351, 136], [350, 128], [349,120],[349,113], [348,105],
+    [392,170], [389,157], [385.5,146], [382,136], [380,128], [378,120], [376, 113], [374,105],
+    [431, 169], [424,157], [419,146], [414, 136], [410, 128], [406,120], [402, 112], [399, 106]
+    ]
+    manualOrg = np.array(manualCorners, dtype= np.float32).reshape(-1, 1, 2) # N,1,2
+
+    orig_chunks = cornersOrg.reshape(6, 8, -1)
+    new_chunks = manualOrg.reshape(6, 8, -1)
+    combined = np.concatenate((orig_chunks, new_chunks), axis=1)
+    final_array = combined.reshape(96, 1, 2)
+
+    # Initialize
+    pattern_x = 16
+    pattern_y = 6
+    
     
     #**** P_obj definition starting from (0,0,0) ******************
     #Note that the vertical coordinate (row) is first index
@@ -47,19 +75,11 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
 
     #********************************************************************************
 
-    # Find Corners
-    imgBGR = cv2.imread(cboard_path)
-    imgGray = cv2.cvtColor(imgBGR, cv2.COLOR_BGR2GRAY)
-    
-    #cornersFound is true/false
-    cornersFound, cornersOrg = cv2.findChessboardCorners(imgGray, (pattern_x, pattern_y), None)
 
     if (cornersFound):
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        cornersOrg = cv2.cornerSubPix(imgGray, cornersOrg, (11, 11), (-1, -1), criteria)
-        cornersOrg[7, 0, 0] = 252
-        cornersOrg[7, 0, 1] = 174
-        print(cornersOrg[7])
+        # cornersOrg = cv2.cornerSubPix(imgGray, final_array, (11, 11), (-1, -1), criteria)
+        cornersOrg = final_array
         if (showPics):
             cv2.drawChessboardCorners(imgBGR, (pattern_x, pattern_y), cornersOrg, cornersFound)
             cv2.imshow('Checkerboard Corners', imgBGR)
@@ -85,19 +105,19 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
             
             depth = P_cam[i][2]
             # depth = math.sqrt(P_cam[i][0]**2 + P_cam[i][1]**2 + P_cam[i][2]**2)
-            cv2.circle(imgPlot, (px_x, px_y), radius=4, color=(0, 255, 0), thickness=-1)
+            cv2.circle(imgPlot, (px_x, px_y), radius=2, color=(0, 255, 0), thickness=-1)
             
-            text = f"{depth:.2f}m"
+            # text = f"{depth:.2f}m"
             
-            # 5. Draw the text slightly above the corner point
-            # Parameters: image, text, bottom-left corner of text, font, scale, color, thickness
-            cv2.putText(imgPlot, text, (px_x - 15, px_y - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1, cv2.LINE_AA)
+            # # 5. Draw the text slightly above the corner point
+            # # Parameters: image, text, bottom-left corner of text, font, scale, color, thickness
+            # cv2.putText(imgPlot, text, (px_x - 15, px_y - 10), 
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.2, (0, 0, 255), 1, cv2.LINE_AA)
         
         #Saving Image
         output_dir = project_root / "data" / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
-        img_save_path = str(output_dir / f"mapped_fisheye_{d_ref_img}")
+        img_save_path = str(output_dir / f"mapped_fisheye_{d_ref_img}.jpg")
         cv2.imwrite(img_save_path, imgPlot)
         print(f"Successfully saved mapped image to: {img_save_path}")
 
@@ -114,4 +134,4 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
 
 
 if __name__ == "__main__":
-  find_checker_metric("undistort_ref6.png", "fisheye_calib.npz", 0.0285, False)
+  find_checker_metric("ref13", "fisheye_calib.npz", 0.0285, False)
