@@ -2,6 +2,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
+import numpy as np
+
 from scripts.mde.DAV2_pth import DepthAnythingPredictor
 from app.robot_module.robot import Robot
 from app.perception.scale_calibration import FloorScaleCalibration
@@ -24,16 +26,18 @@ class MDE_Depth:
         return metric_depth
 
 
-    def frame_to_pointcloud(self, frame):
+    def frame_to_pcd(self, frame, delete_ground=True) -> np.ndarray :
         """Processes a single frame and returns the pointcloud."""
         metric_depth = self.process_metric(frame)
-        pcd_cc = self.pcd_processor.proj_pcd_cc(metric_depth, delete_ground=True)
+        pcd_cc = self.pcd_processor.proj_pcd_cc(metric_depth, delete_ground=delete_ground)
         pcd_rc = self.pcd_processor.pcd_camera_to_robot(pcd_cc)
-        
         return pcd_rc
 
-    def frame_to_depth_scan(self, frame):
-        pass
+
+    def frame_to_squished_pcd(self, frame) -> np.ndarray:
+        pcd: np.ndarray = self.frame_to_pcd
+        print(pcd.shape)
+        return pcd
 
     def annotate_floor(self, frame):
         return self.fsc.annotate_floor(frame)

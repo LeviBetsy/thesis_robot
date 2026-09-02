@@ -27,7 +27,7 @@ class PointCloudProjection:
         self.cx = intrinsic[0, 2]
         self.cy = intrinsic[1, 2]
 
-        self.ground_Z = 0.05
+        self.ground_Z = 0.1 #in meters
     
 
     def proj_pcd_cc(self, Z, delete_ground=True):

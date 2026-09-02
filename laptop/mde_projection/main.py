@@ -9,6 +9,28 @@ from app.perception.mde_depth import MDE_Depth
 from app.perception.point_cloud_visualizer import PointCloudVisualizer
 from app.stream.zmq_stream import VideoReceiver
 
+def real_time_stream():
+    mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
+
+    display_frame = [np.random.rand(480, 640, 3)]
+    def callback_new_video(frame):
+        display_frame[0] = frame
+    receiver = VideoReceiver(callback=callback_new_video)
+    time.sleep(5)
+    try:
+        while True:
+            frame = display_frame[0]
+
+            pcd : np.ndarray = mde_depth.frame_to_pcd(frame)
+
+            time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        print("Stopping...")
+    finally:
+        receiver.stop()
+
+        cv2.destroyAllWindows
 
 def real_time_pcd():
     mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
@@ -23,7 +45,7 @@ def real_time_pcd():
         while True:
             frame = display_frame[0]
 
-            pcd : np.ndarray = mde_depth.frame_to_pointcloud(frame)
+            pcd : np.ndarray = mde_depth.frame_to_pcd(frame)
             visualizer.update(pcd)
             
             #CV Imshow
@@ -46,7 +68,7 @@ def static_inspection():
     visualizer = PointCloudVisualizer()
     frame = cv2.imread("./data/leg_problem/ref20.jpg")
 
-    pcd = mde_depth.frame_to_pointcloud(frame)
+    pcd = mde_depth.frame_to_pcd(frame)
     rel_depth = mde_depth.rel_depth
     print(f"min calibrated rel is: {mde_depth.fsc.min_calibrated_rel}")
     visualizer.update(pcd)
