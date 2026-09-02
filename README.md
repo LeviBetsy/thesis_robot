@@ -1,4 +1,15 @@
 # Embedded Thesis Project - Levi
+This project is developed for my senior thesis. The primary objective is to build an autonomous robot capable of navigating real-world environments by attempting to replace traditional depth sensors—such as LiDAR and stereo cameras—with Monocular Depth Estimation (MDE). The robot utilizes Monte Carlo Localization as its localization method.
+
+The system's architecture is distributed across three main hardware components:
+
+- Laptop: Hosts the Monocular Depth Estimation model, processing visual input to output range-finder data for the system.
+
+- Raspberry Pi: Acts as the central brain, running the high-level decision-making software and executing the Monte Carlo localization based on the range-finder data.
+
+- MSP432 Microcontroller: Handles the bare-metal, low-level control of the TI-RSLK rover platform, written without the use of a Hardware Abstraction Layer (HAL).
+## TI-RLSK Rover
+[Github for MSP432 Code](https://github.com/LeviBetsy/thesis_robot_msp432)
 ## Instalalation
 - [pyenv](https://github.com/pyenv/pyenv?tab=readme-ov-file#linuxunix)
 ## Directory set up

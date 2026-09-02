@@ -7,7 +7,7 @@ import numpy as np
 
 from app.perception.mde_depth import MDE_Depth
 from app.perception.point_cloud_visualizer import PointCloudVisualizer
-from app.stream.zmq_stream import VideoReceiver
+from app.stream.zmq_stream import VideoReceiver, PointStreamer
 
 def real_time_stream():
     mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
@@ -15,21 +15,23 @@ def real_time_stream():
     display_frame = [np.random.rand(480, 640, 3)]
     def callback_new_video(frame):
         display_frame[0] = frame
-    receiver = VideoReceiver(callback=callback_new_video)
+    video_receiver = VideoReceiver(callback=callback_new_video)
     time.sleep(5)
+
+    pcd_streamer = PointStreamer(fps= 3)
     try:
         while True:
             frame = display_frame[0]
-
-            pcd : np.ndarray = mde_depth.frame_to_pcd(frame)
+            pcd : np.ndarray = mde_depth.frame_to_squished_pcd(frame)
+            pcd_streamer.send_point(pcd)
 
             time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Stopping...")
     finally:
-        receiver.stop()
-
+        video_receiver.stop()
+        pcd_streamer.stop()
         cv2.destroyAllWindows
 
 def real_time_pcd():
@@ -39,7 +41,7 @@ def real_time_pcd():
     display_frame = [np.random.rand(480, 640, 3)]
     def callback_new_video(frame):
         display_frame[0] = frame
-    receiver = VideoReceiver(callback=callback_new_video)
+    video_receiver = VideoReceiver(callback=callback_new_video)
     time.sleep(5)
     try:
         while True:
@@ -59,7 +61,7 @@ def real_time_pcd():
     except KeyboardInterrupt:
         print("Stopping...")
     finally:
-        receiver.stop()
+        video_receiver.stop()
         visualizer.close()
         cv2.destroyAllWindows
 
@@ -96,5 +98,6 @@ def static_inspection():
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    real_time_pcd()
+    # real_time_pcd()
     # static_inspection()
+    real_time_stream()

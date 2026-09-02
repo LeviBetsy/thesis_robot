@@ -35,8 +35,8 @@ class MDE_Depth:
 
 
     def frame_to_squished_pcd(self, frame) -> np.ndarray:
-        pcd: np.ndarray = self.frame_to_pcd
-        print(pcd.shape)
+        pcd: np.ndarray = self.frame_to_pcd(frame, delete_ground=True)[:, :2]
+        # print(pcd.shape)
         return pcd
 
     def annotate_floor(self, frame):
