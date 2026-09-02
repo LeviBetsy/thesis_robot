@@ -2,11 +2,9 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 import numpy as np
-from pathlib import Path
-from app.module.camera import Camera
-from app.module.robot import Robot
+from app.robot_module.robot import Robot
 
-class PointCloudProcessor:
+class PointCloudProjection:
     def __init__(self, robot: Robot):
         self.robot = robot
         camera = self.robot.camera
@@ -54,36 +52,10 @@ class PointCloudProcessor:
             mask = ret[:, 2] >= self.ground_Z
             return ret[mask]
         return ret
-    
-    def pcd_camera_to_robot(self, pcd_cc: np.ndarray) -> np.ndarray:
-        """
 
-        Args:
-            pcd_cc (np.ndarray): A (Nx3) array of point cloud in camera coordinate
-        Returns:
-            point_cloud (np.ndarray): (Nx3) array of point cloud in robot coordinate
-        """
+    def pcd_camera_to_robot(self, pcd_cc: np.ndarray) -> np.ndarray:
         pcd_rc = (pcd_cc @ self.robot.cam_R.T) + self.robot.cam_t
         return pcd_rc
-
-    def pcd_camera_to_world(self, pcd_cc: np.ndarray) -> np.ndarray:
-        pcd_rc = (pcd_cc @ self.robot.cam_R.T) + self.robot.cam_t
-
-        t_world = np.array([self.robot.x, self.robot.y, 0.0])
-        cos_t = np.cos(self.robot.theta)
-        sin_t = np.sin(self.robot.theta)
-        
-        R_world = np.array([
-            [cos_t, -sin_t, 0.0],
-            [sin_t,  cos_t, 0.0],
-            [0.0,    0.0,   1.0]
-        ])
-        pcd_wc = (pcd_rc @ R_world.T) + t_world
-        return pcd_wc
     
     def average_floor_z(self, pcd_rc: np.ndarray) -> float:
         return np.mean(pcd_rc[:, 2])
-
-
-    
-    

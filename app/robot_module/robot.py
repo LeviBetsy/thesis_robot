@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
-from app.module.camera import Camera
+from app.robot_module.camera import Camera
 import numpy as np
 import math
 import threading
