@@ -7,7 +7,7 @@ import numpy as np
 
 from app.perception.mde_depth import MDE_Depth
 from app.perception.point_cloud_visualizer import PointCloudVisualizer
-from app.stream.zmq_stream import PoseVideoReceiver
+from app.stream.zmq_stream import VideoReceiver
 
 
 def real_time_pcd():
@@ -17,7 +17,7 @@ def real_time_pcd():
     display_frame = [np.random.rand(480, 640, 3)]
     def callback_new_video(frame):
         display_frame[0] = frame
-    receiver = PoseVideoReceiver(callback=callback_new_video)
+    receiver = VideoReceiver(callback=callback_new_video)
     time.sleep(5)
     try:
         while True:
