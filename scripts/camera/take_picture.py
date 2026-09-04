@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
-from app.module.camera import Camera
+from app.robot_module.camera import Camera
 import time
 
 def take_picture():
@@ -31,7 +31,7 @@ def take_picture():
 
     # 3. Initialize the camera (0 is usually the default built-in/USB webcam)
     cam = cv2.VideoCapture(0)
-    time.sleep(5)
+    time.sleep(2)
     
     if not cam.isOpened():
         print("Error: Could not open camera.")

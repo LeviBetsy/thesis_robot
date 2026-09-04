@@ -6,8 +6,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
-from app.module.uart import *
-from app.module.robot import Robot
+from app.robot_module.uart import *
+from app.robot_module.robot import Robot
 
 class OdometryLocalization:
     def __init__(self, robot: Robot):

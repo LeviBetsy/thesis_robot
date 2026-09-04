@@ -11,7 +11,7 @@ import time
 from ultralytics import YOLO
 from app.yolo.detector import *
 from app.yolo.geometry import *
-from app.localization.localization import *
+from app.localization.odometry import *
 from app.control.keyboard_controller_ssh import *
 #********************************************** IMPORTS **********************************************
 
