@@ -7,23 +7,35 @@ import numpy as np
 
 from app.perception.mde_depth import MDE_Depth
 from app.perception.point_cloud_visualizer import PointCloudVisualizer
-from app.stream.zmq_stream import VideoReceiver, PointStreamer
+from app.stream.zmq_stream import VideoReceiver, PointStreamer, RangeStreamer
 
-def real_time_stream():
+def real_time_stream(cv_show=False, visualize=False):
     mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
 
     display_frame = [np.random.rand(480, 640, 3)]
     def callback_new_video(frame):
         display_frame[0] = frame
     video_receiver = VideoReceiver(callback=callback_new_video)
-    time.sleep(5)
+    # pcd_streamer = PointStreamer(fps= 3)
+    range_streamer = RangeStreamer(fps= 3)
+    if visualize:
+        visualizer = PointCloudVisualizer()
 
-    pcd_streamer = PointStreamer(fps= 3)
+    time.sleep(5)
     try:
         while True:
             frame = display_frame[0]
-            pcd : np.ndarray = mde_depth.frame_to_squished_pcd(frame)
-            pcd_streamer.send_point(pcd)
+            pcd = mde_depth.frame_to_pcd(frame)
+            if visualize: visualizer.update(pcd)
+            ray_cast = mde_depth.pcd_to_ray_casting(pcd)
+            print(ray_cast)
+            range_streamer.send_range(ray_cast)
+
+            #CV Imshow
+            if cv_show:
+                cv2.imshow("Video Feed", frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
             time.sleep(0.1)
 
@@ -31,7 +43,8 @@ def real_time_stream():
         print("Stopping...")
     finally:
         video_receiver.stop()
-        pcd_streamer.stop()
+        range_streamer.stop()
+        if visualize: visualizer.close()
         cv2.destroyAllWindows
 
 def real_time_pcd():
@@ -97,7 +110,27 @@ def static_inspection():
     visualizer.close()
     cv2.destroyAllWindows()
 
+def static_process():
+    mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
+    frame = cv2.imread("./data/leg_problem/ref20.jpg")
+    visualizer = PointCloudVisualizer()
+
+    pcd = mde_depth.frame_to_pcd(frame)
+    ray_cast = mde_depth.pcd_to_ray_casting(pcd)
+    print("Ray Casting result:")
+    print(ray_cast)
+
+    while True:
+        visualizer.update(pcd)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    visualizer.close()
+    cv2.destroyAllWindows()
+
+
 if __name__ == "__main__":
     # real_time_pcd()
     # static_inspection()
-    real_time_stream()
+    real_time_stream(cv_show=True, visualize=True)
+    # static_process()

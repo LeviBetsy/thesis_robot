@@ -24,6 +24,16 @@ class Camera:
             raise KeyError(f"Could not find expected key {e} in the .npz file. Check your calibration script keys.")
         # *************************************************************************************
 
+        # Intrinsics (in pixels)
+        self.fx = self.K[0, 0]
+        self.fy = self.K[1, 1]
+        self.cx = self.K[0, 2]
+        self.cy = self.K[1, 2]
+
+        # Field of view (in radians)
+        self.fov_x = 2 * np.arctan(self.w / (2 * self.fx))
+        self.fov_y = 2 * np.arctan(self.h / (2 * self.fy))
+
     def undistort_fisheye(self, frame: np.ndarray) -> np.ndarray:
         """
         Applies the stored camera matrix and distortion coefficients 

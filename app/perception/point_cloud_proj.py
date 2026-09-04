@@ -12,25 +12,12 @@ class PointCloudProjection:
         # Pre-compute and cache the full 2D pixel coordinate grids
         self.u, self.v = np.meshgrid(np.arange(camera.w), np.arange(camera.h))
 
-        # ---------------------------------------------------------
-        # K = np.array([[fx,  0, cx],
-        #                    [ 0, fy, cy],
-        #                    [ 0,  0,  1]])
-        # ---------------------------------------------------------
-        
-        # Extract focal lengths (in pixels)
-        intrinsic = camera.K
-        self.fx = intrinsic[0, 0]
-        self.fy = intrinsic[1, 1]
-        
-        # Extract principal point (optical center)
-        self.cx = intrinsic[0, 2]
-        self.cy = intrinsic[1, 2]
+        self.fx = camera.fx
+        self.fy = camera.fy
+        self.cx = camera.cx
+        self.cy = camera.cy
 
-        self.ground_Z = 0.1 #in meters
-    
-
-    def proj_pcd_cc(self, Z, delete_ground=True):
+    def proj_pcd_cc(self, Z):
         """
         Converts a 2D NumPy array of metric depth (Z) into a point cloud in CAMERA COORDINATE
         
@@ -48,9 +35,6 @@ class PointCloudProjection:
         Y = -(v_valid - self.cy) * Z_valid / self.fy #negative because camera space grow downward while pointcloud grow up
         
         ret = np.stack((X, Z_valid, Y), axis=-1) # camera's z is robot coordinate y and vice versa
-        if delete_ground: 
-            mask = ret[:, 2] >= self.ground_Z
-            return ret[mask]
         return ret
 
     def pcd_camera_to_robot(self, pcd_cc: np.ndarray) -> np.ndarray:

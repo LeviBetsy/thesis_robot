@@ -10,11 +10,13 @@ from app.perception.scale_calibration import FloorScaleCalibration
 from app.perception.point_cloud_proj import PointCloudProjection
 
 class MDE_Depth:
-    def __init__(self, calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz"):
+    def __init__(self, calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz", ground_Z=0.01):
         self.robot = Robot(calib_file)
         self.predictor = DepthAnythingPredictor()
         self.fsc = FloorScaleCalibration(ref_file, group_n=16)
         self.pcd_processor = PointCloudProjection(self.robot)
+
+        self.ground_Z = ground_Z #in meters
 
     def process_rel(self,frame):
         return self.predictor.infer(frame)
@@ -29,15 +31,57 @@ class MDE_Depth:
     def frame_to_pcd(self, frame, delete_ground=True) -> np.ndarray :
         """Processes a single frame and returns the pointcloud."""
         metric_depth = self.process_metric(frame)
-        pcd_cc = self.pcd_processor.proj_pcd_cc(metric_depth, delete_ground=delete_ground)
+        pcd_cc = self.pcd_processor.proj_pcd_cc(metric_depth)
         pcd_rc = self.pcd_processor.pcd_camera_to_robot(pcd_cc)
+
+        if delete_ground:
+            mask = pcd_rc[:, 2] >= self.ground_Z
+            pcd_rc = pcd_rc[mask]
         return pcd_rc
 
 
-    def frame_to_squished_pcd(self, frame) -> np.ndarray:
-        pcd: np.ndarray = self.frame_to_pcd(frame, delete_ground=True)[:, :2]
-        # print(pcd.shape)
-        return pcd
+    def squish_pcd(self, pcd: np.ndarray) -> np.ndarray:
+        """Drops the height column, projecting a robot-frame pointcloud to 2D (x, y)."""
+        return pcd[:, :2]
+
+
+    def pcd_to_ray_casting(self, pcd: np.ndarray, n_rays=16, max_range=0.6) -> np.ndarray:
+        """
+        Casts a fan of n_rays evenly spaced across the camera's horizontal FOV
+        (each ray covering an angular width of fov_x / n_rays), and returns for
+        each ray the distance to the nearest point in the squished (x, y) point cloud.
+        Rays with no point within max_range report max_range.
+
+        Angle 0 is straight ahead; positive angles are to the robot's right.
+
+        Returns:
+            ranges (np.ndarray): shape (n_rays,), distance in meters per ray.
+        """
+        squished_pcd = self.squish_pcd(pcd)
+        ranges = np.full(n_rays, max_range, dtype=np.float32)
+        if squished_pcd.shape[0] == 0:
+            return ranges
+
+        x, y = squished_pcd[:, 0], squished_pcd[:, 1]
+        point_ranges = np.hypot(x, y) #calculate the hypotenuse distance from robot to point, shape (N,)
+        angles = np.arctan2(x, y) #0 is straight ahead, positive is right, shape (N,)
+
+        fov_x = self.robot.camera.fov_x
+        ray_w = fov_x / n_rays # calculate the ray width
+
+        # +fov_x/2 makes range from [-fov/2,fov/2] to [0,fov]
+        # fit each angle from angles to each bin_idx, shape (N,)
+        bin_idx = np.floor((angles + fov_x / 2) / ray_w).astype(int) 
+        valid = (bin_idx >= 0) & (bin_idx < n_rays) & (point_ranges <= max_range)
+        #compare elements of ranges (n_rays,) at indices bin_idx[valid] 
+        #with point_ranges[valid] at those indices
+        np.minimum.at(ranges, bin_idx[valid], point_ranges[valid])
+        return ranges
+
+    def frame_to_ray_casting(self, frame, n_rays=16, max_range=0.6, delete_ground=True) -> np.ndarray:
+        """Processes a single frame end-to-end into ray-casted ranges. See pcd_to_ray_casting for details."""
+        pcd = self.frame_to_pcd(frame, delete_ground=delete_ground)
+        return self.pcd_to_ray_casting(pcd, n_rays=n_rays, max_range=max_range)
 
     def annotate_floor(self, frame):
         return self.fsc.annotate_floor(frame)

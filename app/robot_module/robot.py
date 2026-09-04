@@ -8,7 +8,7 @@ import threading
 
 
 class Robot:
-    def __init__(self, camera_calib_fpath):
+    def __init__(self, camera_calib_fpath, camera_tilt = -30):
         """
         Initializes the Robot with its position, orientation, and camera matrices.
             camera_transform_matrix (np.ndarray, optional): A 4x4 homogeneous transformation matrix 
@@ -19,7 +19,7 @@ class Robot:
         self.y = 0
         self.theta = 0
 
-        angle = np.radians(-30) # Initilize the camera to tilt 30 degree down from the mounting position
+        angle = np.radians(camera_tilt) # Initilize the camera to tilt 30 degree down from the mounting position
         self.cam_R = np.array([ # Rotation matrix to get camera coordinate to robot coordinate
             [1, 0, 0],
             [0, np.cos(angle), -np.sin(angle)],
