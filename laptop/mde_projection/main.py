@@ -112,7 +112,7 @@ def static_inspection():
 
 def static_process():
     mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
-    frame = cv2.imread("./data/leg_problem/ref20.jpg")
+    frame = cv2.imread("./data/ref21.jpg")
     visualizer = PointCloudVisualizer()
 
     pcd = mde_depth.frame_to_pcd(frame)
@@ -132,5 +132,5 @@ def static_process():
 if __name__ == "__main__":
     # real_time_pcd()
     # static_inspection()
-    real_time_stream(cv_show=True, visualize=True)
-    # static_process()
+    # real_time_stream(cv_show=True, visualize=True)
+    static_process()

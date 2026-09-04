@@ -63,17 +63,32 @@ class MDE_Depth:
             return ranges
 
         x, y = squished_pcd[:, 0], squished_pcd[:, 1]
-        point_ranges = np.hypot(x, y) #calculate the hypotenuse distance from robot to point, shape (N,)
-        angles = np.arctan2(x, y) #0 is straight ahead, positive is right, shape (N,)
+
+        # squished_pcd is in the robot frame (rotated AND translated by cam_t), but
+        # fov_x is a camera-intrinsic quantity centered on the camera, not the robot's
+        # origin. Undo just the translation (cam_t[0] is always 0 - camera sits on the
+        # robot's centerline) to get the bearing as seen from the camera, so bin
+        # boundaries line up with the camera's true angular FOV.
+        cam_t_y = self.robot.cam_t[1]
+        dir_y = y - cam_t_y
+        dir_range = np.hypot(x, dir_y) #camera-to-point distance, shape (N,)
+        angles = np.arctan2(x, dir_y) #bearing from the camera, 0 is straight ahead, positive is right, shape (N,)
 
         fov_x = self.robot.camera.fov_x
         ray_w = fov_x / n_rays # calculate the ray width
 
         # +fov_x/2 makes range from [-fov/2,fov/2] to [0,fov]
         # fit each angle from angles to each bin_idx, shape (N,)
-        bin_idx = np.floor((angles + fov_x / 2) / ray_w).astype(int) 
+        bin_idx = np.floor((angles + fov_x / 2) / ray_w).astype(int)
+
+        # Camera sits cam_t_y ahead of the robot's center along its forward axis, so
+        # dir_range is measured from the wrong origin. Recover the true distance from
+        # the robot's center via law of cosines on the (robot center, camera, point)
+        # triangle, using the known offset cam_t_y and the camera bearing `angles`.
+        point_ranges = np.sqrt(dir_range**2 + cam_t_y**2 + 2 * dir_range * cam_t_y * np.cos(angles)) #math confirmed
+
         valid = (bin_idx >= 0) & (bin_idx < n_rays) & (point_ranges <= max_range)
-        #compare elements of ranges (n_rays,) at indices bin_idx[valid] 
+        #compare elements of ranges (n_rays,) at indices bin_idx[valid]
         #with point_ranges[valid] at those indices
         np.minimum.at(ranges, bin_idx[valid], point_ranges[valid])
         return ranges
