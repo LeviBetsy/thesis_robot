@@ -28,14 +28,16 @@ class OccupancyGrid:
 
     def world_to_grid(self, x, y):
         """Converts physical coordinates (meters) to 2D array indices."""
-        col = int(x // self.cell_size)
-        row = int(y // self.cell_size)
+        #add self.cell_size to account for the perimeter wall
+        col = int((x + self.cell_size) // self.cell_size)
+        row = int((y+ self.cell_size) // self.cell_size)
         return row, col
 
     def grid_to_world(self, row, col):
         """Returns the physical coordinates (meters) at the center of a grid cell."""
-        x = (col * self.cell_size) + (self.cell_size / 2.0)
-        y = (row * self.cell_size) + (self.cell_size / 2.0)
+        # subtract self.cell_size to account for perimeter thickness being added
+        x = (col * self.cell_size) + (self.cell_size / 2.0) - self.cell_size
+        y = (row * self.cell_size) + (self.cell_size / 2.0) - self.cell_size
         return x, y
 
     def add_wall(self, x1, y1, x2, y2):
@@ -44,13 +46,11 @@ class OccupancyGrid:
         Segment must be axis-aligned (x1==x2 for a vertical wall, or y1==y2 for a horizontal wall).
         """
         if x1 == x2:
-            col = int(x1 // self.cell_size)
-            row_start, _ = self.world_to_grid(x1, min(y1, y2))
+            row_start, col = self.world_to_grid(x1, min(y1, y2))
             row_end, _ = self.world_to_grid(x1, max(y1, y2))
             self.data[row_start:row_end + 1, col] = 1
         elif y1 == y2:
-            row = int(y1 // self.cell_size)
-            _, col_start = self.world_to_grid(min(x1, x2), y1)
+            row, col_start = self.world_to_grid(min(x1, x2), y1)
             _, col_end = self.world_to_grid(max(x1, x2), y1)
             self.data[row, col_start:col_end + 1] = 1
         else:

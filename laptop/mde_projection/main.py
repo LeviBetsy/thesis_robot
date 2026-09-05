@@ -12,7 +12,7 @@ from app.stream.zmq_stream import VideoReceiver, PointStreamer, RangeStreamer
 def real_time_stream(cv_show=False, visualize=False):
     mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
 
-    display_frame = [np.random.rand(480, 640, 3)]
+    display_frame = [None]
     def callback_new_video(frame):
         display_frame[0] = frame
     video_receiver = VideoReceiver(callback=callback_new_video)
@@ -20,22 +20,21 @@ def real_time_stream(cv_show=False, visualize=False):
     range_streamer = RangeStreamer(fps= 3)
     if visualize:
         visualizer = PointCloudVisualizer()
-
     time.sleep(5)
     try:
         while True:
             frame = display_frame[0]
-            pcd = mde_depth.frame_to_pcd(frame)
-            if visualize: visualizer.update(pcd)
-            ray_cast = mde_depth.pcd_to_ray_casting(pcd)
-            print(ray_cast)
-            range_streamer.send_range(ray_cast)
+            if frame:
+                pcd = mde_depth.frame_to_pcd(frame)
+                if visualize: visualizer.update(pcd)
+                ray_cast = mde_depth.pcd_to_ray_casting(pcd)
+                range_streamer.send_range(ray_cast)
 
-            #CV Imshow
-            if cv_show:
-                cv2.imshow("Video Feed", frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                #CV Imshow
+                if cv_show:
+                    cv2.imshow("Video Feed", frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
 
             time.sleep(0.1)
 
@@ -45,37 +44,6 @@ def real_time_stream(cv_show=False, visualize=False):
         video_receiver.stop()
         range_streamer.stop()
         if visualize: visualizer.close()
-        cv2.destroyAllWindows
-
-def real_time_pcd():
-    mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
-    visualizer = PointCloudVisualizer()
-
-    display_frame = [np.random.rand(480, 640, 3)]
-    def callback_new_video(frame):
-        display_frame[0] = frame
-    video_receiver = VideoReceiver(callback=callback_new_video)
-    time.sleep(5)
-    try:
-        while True:
-            frame = display_frame[0]
-
-            pcd : np.ndarray = mde_depth.frame_to_pcd(frame)
-            visualizer.update(pcd)
-            
-            #CV Imshow
-            anno_frame = mde_depth.annotate_floor(frame)
-            cv2.imshow("Video Feed", anno_frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-            time.sleep(0.1)
-
-    except KeyboardInterrupt:
-        print("Stopping...")
-    finally:
-        video_receiver.stop()
-        visualizer.close()
         cv2.destroyAllWindows
 
 def static_inspection():
@@ -130,7 +98,7 @@ def static_process():
 
 
 if __name__ == "__main__":
-    # real_time_pcd()
     # static_inspection()
     # real_time_stream(cv_show=True, visualize=True)
-    static_process()
+    real_time_stream()
+    # static_process()
