@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 import threading
@@ -26,7 +27,7 @@ works the same on the Pi over SSH and on the laptop:
     vis.update()            # after the grid changes
 '''
 class MapVisualizer:
-    def __init__(self, grid: OccupancyGrid, host="0.0.0.0", port=8080,
+    def __init__(self, grid: OccupancyGrid, host="0.0.0.0", port=8001,
                  max_size=900, grid_lines=True, refresh_ms=250):
         self.grid = grid
         self.host = host
@@ -37,6 +38,7 @@ class MapVisualizer:
 
         self.mutex_lock = threading.Lock()
         self.data = np.array(grid.data, dtype=np.float32)
+        self.particles = np.zeros((0, 3), dtype=np.float32)
         self.server = None
         self.server_thread = None
 
@@ -48,12 +50,28 @@ class MapVisualizer:
         with self.mutex_lock:
             self.data = np.array(source, dtype=np.float32)
 
+    def update_particles(self, particles):
+        """Snapshots the latest particle poses (x, y, theta) to draw on the map."""
+        with self.mutex_lock:
+            self.particles = np.asarray(particles, dtype=np.float32).reshape(-1, 3)
+
     # ---------- rendering ----------
+
+    def _world_to_pixel(self, x, y, rows, scale):
+        """
+        Maps a world-frame (x, y) in meters to a pixel in the rendered (flipped, scaled)
+        image, matching the row/col convention world_to_grid/grid_to_world use.
+        """
+        cell_size = self.grid.cell_size
+        px = (x / cell_size + 1.0) * scale
+        py = (rows - 1.0 - y / cell_size) * scale
+        return px, py
 
     def render(self):
         """Returns the current occupancy grid as a BGR image (occupied = black, free = white)."""
         with self.mutex_lock:
             data = np.clip(self.data, 0.0, 1.0)
+            particles = self.particles.copy()
 
         gray = ((1.0 - data) * 255).astype(np.uint8)
         gray = np.flipud(gray)  # row 0 is y = 0, images draw top down
@@ -71,6 +89,19 @@ class MapVisualizer:
             for row in range(rows + 1):
                 y = min(row * scale, image.shape[0] - 1)
                 cv2.line(image, (0, y), (image.shape[1], y), line, 1)
+
+        if particles.size:
+            radius = max(3, scale // 2)
+            color = (0, 0, 255)
+            for x, y, theta in particles:
+                cx, cy = self._world_to_pixel(x, y, rows, scale)
+                center = (int(round(cx)), int(round(cy)))
+                # screen y grows downward while world y grows upward (image is flipped), so
+                # the direction line's dy is negated relative to the world-frame heading.
+                tip = (int(round(cx + radius * math.cos(theta))),
+                       int(round(cy - radius * math.sin(theta))))
+                cv2.circle(image, center, radius, color, 1, lineType=cv2.LINE_AA)
+                cv2.line(image, center, tip, color, 1, lineType=cv2.LINE_AA)
 
         return image
 
