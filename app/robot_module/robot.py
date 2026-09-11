@@ -15,9 +15,6 @@ class Robot:
                                                             for the camera. Defaults to a 4x4 identity matrix.
             Coordinate system is based on unit wheel (CCW, +N -W -S +E) and 0 theta points East
         """
-        self.x = 0
-        self.y = 0
-        self.theta = 0
 
         angle = np.radians(camera_tilt) # Initilize the camera to tilt 30 degree down from the mounting position
         self.cam_R = np.array([ # Rotation matrix to get camera coordinate to robot coordinate
@@ -27,15 +24,8 @@ class Robot:
         ])
         self.cam_t = np.array([0, 0.07, 0.11]) # Translation vector to get camera to robot coorindate, 7 cm down, 11 cm forward
         self.camera = Camera(camera_calib_fpath)
-
         #Robot description in meters
         self.n = 360 #number of slots/rotation
         self.d = 0.07 #70 mm diameter
         self.w = 0.122 #122mm distance between wheels
         self.c = math.pi*self.d #circumfrence of wheel
-
-        self.mutex_lock = threading.Lock() #mutex lock so only 1 thread access at once
-    def set_robot_pose(self, x, y, theta):
-        self.x = x
-        self.y = y
-        self.theta = theta % (2*math.pi)

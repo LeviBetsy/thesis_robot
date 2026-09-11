@@ -44,6 +44,7 @@ class MCLLocalization:
 
     # ****** INITIALISATION ******
 
+    # have never verified
     def init_particles_uniform(self):
         """Scatters particles over the map's free cells with uniform heading (global localization)."""
         rows, cols = np.nonzero(self.grid.data <= 0.5)
@@ -62,11 +63,34 @@ class MCLLocalization:
         with self.mutex_lock:
             self.particles = [Particle(x[i], y[i], theta[i], w) for i in range(self.n_particles)]
 
-    def init_particles_gaussian(self, x, y, theta, sigma_xy=0.05, sigma_theta=0.1):
-        """Scatters particles around a known starting pose (tracking rather than global localization)."""
-        px = np.random.normal(x, sigma_xy, self.n_particles)
-        py = np.random.normal(y, sigma_xy, self.n_particles)
-        pt = np.random.normal(theta, sigma_theta, self.n_particles)
+    # verified not tested
+    def init_particles_gaussian(self, x, y, theta, sigma_xy=0.05, sigma_theta=0.1, max_attempts=50):
+        """
+        Scatters particles around a known starting pose (tracking rather than global
+        localization). Rejection-sampled against the map: any draw landing outside the
+        grid or inside a wall is redrawn, so every particle starts on a valid hypothesis.
+        """
+        px = np.empty(self.n_particles)
+        py = np.empty(self.n_particles)
+        pt = np.empty(self.n_particles)
+        remaining = np.arange(self.n_particles) #indices still needing a valid draw
+
+        attempts = 0
+        while remaining.size > 0:
+            if attempts >= max_attempts:
+                raise RuntimeError(f"init_particles_gaussian: {remaining.size} particles still "
+                                   f"invalid after {max_attempts} attempts, is ({x}, {y}) actually free?")
+            attempts += 1
+
+            #only redraw the indices that failed last round, not the whole batch
+            sample_x = np.random.normal(x, sigma_xy, remaining.size)
+            sample_y = np.random.normal(y, sigma_xy, remaining.size)
+            sample_theta = np.random.normal(theta, sigma_theta, remaining.size)
+
+            valid = self.grid.is_placeable(sample_x, sample_y)
+            accepted = remaining[valid]
+            px[accepted], py[accepted], pt[accepted] = sample_x[valid], sample_y[valid], sample_theta[valid]
+            remaining = remaining[~valid]
 
         w = 1.0 / self.n_particles
         with self.mutex_lock:
@@ -107,7 +131,7 @@ class MCLLocalization:
 
         # A particle sitting inside a wall or off the map is not a valid hypothesis no
         # matter what its beams say.
-        w = np.where(self.grid.is_free(poses[:, 0], poses[:, 1]), w, 0.0)
+        w = np.where(self.grid.is_placeable(poses[:, 0], poses[:, 1]), w, 0.0)
 
         total = w.sum()
         #if every particle is invalid, fall back to uniform rather than emitting NaNs

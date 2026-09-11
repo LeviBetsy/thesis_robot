@@ -17,8 +17,12 @@ class OccupancyGrid:
         self.cols = math.ceil(self.width / self.cell_size)
         self.rows = math.ceil(self.length / self.cell_size)
         
-        # Initialize the internal grid
-        self.data = np.full((self.rows, self.cols), default_value)
+        # Initialize the internal grid. dtype is forced to float64 rather than inferred
+        # from default_value: np.full infers int64 when default_value is a plain int (the
+        # common call pattern is default_value=0), which would silently truncate every
+        # fractional value ever written into the grid -- the 0.5 "unknown" fill, add_wall's
+        # margin, anything short of exactly 0 or 1.
+        self.data = np.full((self.rows, self.cols), default_value, dtype=np.float64)
 
         # Fill the outer perimeter (walls) with 1
         self.data[0, :] = 1
@@ -45,7 +49,7 @@ class OccupancyGrid:
         return x, y
 
     # verified, have not tested
-    def is_free(self, x, y, occ_threshold=0.5):
+    def is_placeable(self, x, y, occ_threshold=0.5):
         """
         Checks whether world points land on a non-occupied cell inside the map.
         Accepts scalars or arrays; arrays must broadcast against each other.
@@ -68,7 +72,7 @@ class OccupancyGrid:
         return inside & ~occupied
 
     # verified, have not tested
-    def ray_cast_batch(self, origins, headings, max_range, occ_threshold=0.5):
+    def ray_cast_batch(self, origins, headings, max_range, occ_threshold=0.8):
         """
         Marches M rays through the grid and returns the distance to the first occupied cell.
 
@@ -118,21 +122,35 @@ class OccupancyGrid:
 
         return ranges
 
-    def add_wall(self, x1, y1, x2, y2):
+    def add_wall(self, x1, y1, x2, y2, margin=0.7):
         """
-        Marks a one-cell-thick straight wall segment (in meters) as occupied.
+        Marks a one-cell-thick straight wall segment (in meters) as occupied, then raises
+        every cell directly adjacent to it (up/down/left/right, not diagonally) to at
+        least `margin` -- a one-cell safety buffer so a particle can't sit flush against a
+        wall. `margin` only ever raises a cell (max(current, margin)), so it never
+        overwrites the wall itself or a bigger margin left by another nearby wall.
         Segment must be axis-aligned (x1==x2 for a vertical wall, or y1==y2 for a horizontal wall).
         """
         if x1 == x2:
             row_start, col = self.world_to_grid(x1, min(y1, y2))
             row_end, _ = self.world_to_grid(x1, max(y1, y2))
-            self.data[row_start:row_end + 1, col] = 1
+            row_lo, row_hi, col_lo, col_hi = row_start, row_end, col, col
         elif y1 == y2:
             row, col_start = self.world_to_grid(min(x1, x2), y1)
             _, col_end = self.world_to_grid(max(x1, x2), y1)
-            self.data[row, col_start:col_end + 1] = 1
+            row_lo, row_hi, col_lo, col_hi = row, row, col_start, col_end
         else:
             raise ValueError("Wall segment must be axis-aligned: x1 == x2 or y1 == y2")
+
+        self.data[row_lo:row_hi + 1, col_lo:col_hi + 1] = 1
+
+        #4-connected neighbour of every wall cell, one cell out in each direction. A plain
+        #loop is fine here, add_wall only runs a handful of times at map construction.
+        for row in range(row_lo, row_hi + 1):
+            for col in range(col_lo, col_hi + 1):
+                for nr, nc in ((row - 1, col), (row + 1, col), (row, col - 1), (row, col + 1)):
+                    if 0 <= nr < self.rows and 0 <= nc < self.cols:
+                        self.data[nr, nc] = max(self.data[nr, nc], margin)
 
     @classmethod
     def from_json(cls, filepath, default_value=0.5):

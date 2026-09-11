@@ -98,7 +98,7 @@ def predict_ranges(grid: OccupancyGrid, poses, bearings, cam_forward, max_range)
 '''
 class Particle:
     def __init__(self, x, y, theta, weight=1.0):
-        self.x = float(x)
+        self.x = float(x) #in meter
         self.y = float(y)
         self.theta = float(theta) % (2 * math.pi) #match Robot.set_robot_pose's wrapping
         self.weight = float(weight)
