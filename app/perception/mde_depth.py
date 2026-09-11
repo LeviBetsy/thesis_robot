@@ -75,11 +75,11 @@ class MDE_Depth:
         angles = np.arctan2(x, dir_y) #bearing from the camera, 0 is straight ahead, positive is right, shape (N,)
 
         fov_x = self.robot.camera.fov_x
-        ray_w = fov_x / n_rays # calculate the ray width
+        ray_theta = fov_x / n_rays # calculate the ray angle
 
         # +fov_x/2 makes range from [-fov/2,fov/2] to [0,fov]
         # fit each angle from angles to each bin_idx, shape (N,)
-        bin_idx = np.floor((angles + fov_x / 2) / ray_w).astype(int)
+        bin_idx = np.floor((angles + fov_x / 2) / ray_theta).astype(int)
 
         # Camera sits cam_t_y ahead of the robot's center along its forward axis, so
         # dir_range is measured from the wrong origin. Recover the true distance from

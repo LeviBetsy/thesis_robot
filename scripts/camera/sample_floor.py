@@ -16,7 +16,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from app.module.camera import Camera
+from app.robot_module.camera import Camera
 
 '''
 d_ref_img is the file name for an image of the checkerboard on the floor.
@@ -26,7 +26,7 @@ config_file is the .npz file storing the camera intrinsic matrix and distortion 
   the config_file must be in project_root/config
 square_size is in meter
 '''
-def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
+def find_checker_metric(d_ref_img, config_file, square_size, showPics=False, out_file=""):
     script_path = Path(__file__).resolve()
     project_root = script_path.parents[2]  # Goes up two levels from scripts/
     referenceDir = project_root / "data" / "references"
@@ -107,23 +107,23 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
             # depth = math.sqrt(P_cam[i][0]**2 + P_cam[i][1]**2 + P_cam[i][2]**2)
             cv2.circle(imgPlot, (px_x, px_y), radius=2, color=(0, 255, 0), thickness=-1)
             
-            # text = f"{depth:.2f}m"
+            text = f"{depth:.2f}m"
             
-            # # 5. Draw the text slightly above the corner point
-            # # Parameters: image, text, bottom-left corner of text, font, scale, color, thickness
-            # cv2.putText(imgPlot, text, (px_x - 15, px_y - 10), 
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.2, (0, 0, 255), 1, cv2.LINE_AA)
+            # 5. Draw the text slightly above the corner point
+            # Parameters: image, text, bottom-left corner of text, font, scale, color, thickness
+            cv2.putText(imgPlot, text, (px_x - 15, px_y - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.2, (0, 0, 255), 1, cv2.LINE_AA)
         
         #Saving Image
         output_dir = project_root / "data" / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
-        img_save_path = str(output_dir / f"mapped_fisheye_{d_ref_img}.jpg")
+        img_save_path = str(output_dir / f"mapped_fisheye_{out_file}.jpg")
         cv2.imwrite(img_save_path, imgPlot)
         print(f"Successfully saved mapped image to: {img_save_path}")
 
         #Saving npz file
         configDir = project_root / "config"
-        z_real_file = str(configDir / f"z_real_{d_ref_img}.npz")
+        z_real_file = str(configDir / f"z_real_{out_file}.npz")
         cornersOrg_flat = cornersOrg.reshape(-1, 2) #cornersOrg_flatis Nx2
         z_real = P_cam[:, 2:3] # Using [:, 2:3] slices the 3rd column while keeping it 2D
         np.savez(z_real_file, cornersOrg=cornersOrg_flat, z_real=z_real)
@@ -134,4 +134,4 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False):
 
 
 if __name__ == "__main__":
-  find_checker_metric("ref13", "fisheye_calib.npz", 0.0285, False)
+  find_checker_metric("ref13", "fisheye_calib.npz", 0.023, False, "fix_checker_size")

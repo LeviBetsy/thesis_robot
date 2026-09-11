@@ -5,8 +5,7 @@ from app.localization.visualize_map import MapVisualizer
 from app.localization.map import OccupancyGrid
 
 def visualize_map():
-    map = OccupancyGrid(1.07, 1.78, 0.025, default_value=0)
-    map.load_walls_from_json("config/map/map0.json")
+    map = OccupancyGrid.from_json("config/map/map0.json", default_value=0)
 
     map_visualizer = MapVisualizer(map)
     map_visualizer.serve_forever()

@@ -91,9 +91,9 @@ class VideoReceiver:
         self.context.term()
 
 '''
-    Class for Streaming a numpy array of (N,2) points. The Z dimension must be squished
+    Class for Streaming a numpy array of (N,3) particle poses: (x, y, theta) per row.
 '''
-class PointStreamer:
+class ParticleStreamer:
     def __init__(self, fps, port=5004):
         self.port = port
         self.context = zmq.Context()
@@ -123,9 +123,9 @@ class PointStreamer:
         self.context.term()
 
 '''
-    Class for Receiving a numpy array of (N,2) points. The Z dimension is squished
+    Class for Receiving a numpy array of (N,3) particle poses: (x, y, theta) per row.
 '''
-class PointReceiver:
+class ParticleReceiver:
     def __init__(self, host='127.0.0.1', port=5004, callback=None):
         self.host = host
         self.port = port
@@ -149,9 +149,9 @@ class PointReceiver:
                 # 1. Receive the raw byte payload
                 array_bytes = self.socket.recv()
 
-                # 2. Decode bytes back to float32, then reshape to (N, 2)
+                # 2. Decode bytes back to float32, then reshape to (N, 3): x, y, theta
                 # Using -1 lets NumPy automatically calculate N based on byte length
-                arr = np.frombuffer(array_bytes, dtype=np.float32).reshape(-1, 2)
+                arr = np.frombuffer(array_bytes, dtype=np.float32).reshape(-1, 3)
 
                 # 3. Pass the array to the callback
                 if self.callback:
