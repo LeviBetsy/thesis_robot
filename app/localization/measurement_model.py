@@ -4,20 +4,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 
 import numpy as np
 import math
+from scipy.stats import norm
 
 #TODO: VERIFY
-
-def _norm_cdf(x) -> np.ndarray:
-    """
-    Standard normal CDF, vectorised. Uses the Abramowitz & Stegun 7.1.26 erf approximation
-    (max error 1.5e-7) so this works on the Pi without pulling in scipy.
-    """
-    # erf(z) for z >= 0, mirrored for negatives
-    z = np.abs(x) / math.sqrt(2.0)
-    t = 1.0 / (1.0 + 0.3275911 * z)
-    poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
-    erf = 1.0 - poly * np.exp(-z * z)
-    return 0.5 * (1.0 + np.sign(x) * erf)
 
 
 '''
@@ -27,7 +16,7 @@ def _norm_cdf(x) -> np.ndarray:
     Two properties of THIS sensor drove the defaults:
 
     1. pcd_to_ray_casting pre-fills bins with no point in them with max_range, so
-       "wall at 0.6 m" and "saw nothing" are the same float. The p_max spike is what
+       "wall at 0.4 m" and "saw nothing" are the same float. The p_max spike is what
        keeps a no-return beam from being scored as a confident wall hit (which would
        otherwise drag the whole particle set out into open space). z_max is set high
        for that reason.
@@ -39,7 +28,7 @@ def _norm_cdf(x) -> np.ndarray:
     when particle depletion shows up in testing.
 '''
 class BeamSensorModel:
-    def __init__(self, max_range=0.6, sigma_hit=0.08, lambda_short=2.0,
+    def __init__(self, max_range, sigma_hit=0.08, lambda_short=2.0,
                  z_hit=0.65, z_short=0.05, z_max=0.20, z_rand=0.10, alpha=0.25):
         self.max_range = float(max_range)
         self.sigma_hit = float(sigma_hit)
@@ -80,7 +69,9 @@ class BeamSensorModel:
         # p_hit: gaussian around the predicted range, renormalised over [0, max_range] so
         # particles predicting a range near either end are not penalised for the tail that
         # falls off the interval.
-        eta = _norm_cdf((self.max_range - z_pred) / sigma) - _norm_cdf((0.0 - z_pred) / sigma)
+
+        #eta is actually 1/eta in the book
+        eta = norm.cdf(self.max_range, loc=z_pred, scale=sigma) - norm.cdf(0.0, loc=z_pred, scale=sigma)
         eta = np.maximum(eta, 1e-9)
         p_hit = np.exp(-0.5 * ((z - z_pred) / sigma) ** 2) / (sigma * math.sqrt(2 * math.pi) * eta)
         p_hit = np.where(in_range, p_hit, 0.0)
@@ -114,32 +105,17 @@ class BeamSensorModel:
             w (np.ndarray): shape (N,), float64, sums to 1 (all-equal if every particle
                             scored equally badly).
         """
-        logp = self.alpha * self.log_likelihood(z, z_pred) #temper the correlated beams
+        # logp = self.alpha * self.log_likelihood(z, z_pred) #temper the correlated beams
+        #TODO: times self.alpha if test result turns out too sharp or something
+        logp = self.log_likelihood(z, z_pred)
 
+        ''' if we naively exponential the log sum, we might get 0 for sum weight
+        since w.sum() would be a very very small negative number ~-100
+        have each log subtract logp.max shifts the values
+        shifting does not affect final answer because /total means cancelling logp.max'''
         w = np.exp(logp - logp.max()) #max-subtract before exp, the raw logs underflow
         total = w.sum()
         if total <= 0.0 or not np.isfinite(total):
+            print("ERROR in weights??!?!")
             return np.full(logp.shape[0], 1.0 / logp.shape[0])
         return w / total
-
-
-if __name__ == "__main__":
-    model = BeamSensorModel()
-    z_pred = np.full((1, 16), 0.30)
-
-    # A reading right on the prediction should score far above one that is well off it.
-    print("exact match      :", model.log_likelihood(np.full(16, 0.30), z_pred)[0].round(3))
-    print("off by 5 cm      :", model.log_likelihood(np.full(16, 0.35), z_pred)[0].round(3))
-    print("off by 25 cm     :", model.log_likelihood(np.full(16, 0.55), z_pred)[0].round(3))
-
-    # The no-return spike, the reason the full beam model is worth its extra parameters:
-    # reading exactly max_range while the map predicts a wall at 0.30 must be tolerated far
-    # better than an in-range reading that is no further from the prediction. Without p_max
-    # these two would score alike and every empty bin would shove particles into open space.
-    print("no-return (0.60) :", model.log_likelihood(np.full(16, 0.60), z_pred)[0].round(3))
-    print("in-range at 0.55 :", model.log_likelihood(np.full(16, 0.55), z_pred)[0].round(3))
-
-    # And a short reading (something unmapped in the way) must beat a long one by the same
-    # margin the p_short component buys it.
-    print("short at 0.15    :", model.log_likelihood(np.full(16, 0.15), z_pred)[0].round(3))
-    print("long  at 0.45    :", model.log_likelihood(np.full(16, 0.45), z_pred)[0].round(3))

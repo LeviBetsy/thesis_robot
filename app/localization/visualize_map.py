@@ -62,9 +62,11 @@ class MapVisualizer:
         Maps a world-frame (x, y) in meters to a pixel in the rendered (flipped, scaled)
         image, matching the row/col convention world_to_grid/grid_to_world use.
         """
+        # grid col c spans pixels [c*scale, (c+1)*scale); the image is flipped, so world y=0
+        # is the bottom edge of the image (pixel rows*scale), not the top of the bottom row
         cell_size = self.grid.cell_size
-        px = (x / cell_size + 1.0) * scale
-        py = (rows - 1.0 - y / cell_size) * scale
+        px = (x / cell_size) * scale
+        py = (rows - y / cell_size) * scale
         return px, py
 
     def render(self):
@@ -207,7 +209,11 @@ class MapVisualizer:
 
 
 if __name__ == "__main__":
-    grid = OccupancyGrid(internal_width=1.0, internal_length=0.8, cell_size=0.05, default_value=0)
+    grid = OccupancyGrid(width=1.1, length=0.9, cell_size=0.05, default_value=0)
+    grid.add_wall(0.0, 0.0, 1.1, 0.0)   # bottom perimeter, no longer implicit
+    grid.add_wall(0.0, 0.0, 0.0, 0.9)   # left perimeter
+    grid.add_wall(1.05, 0.0, 1.05, 0.9) # right perimeter
+    grid.add_wall(0.0, 0.85, 1.1, 0.85) # top perimeter
     grid.add_wall(0.3, 0.2, 0.3, 0.6)
     grid.add_wall(0.3, 0.6, 0.7, 0.6)
 

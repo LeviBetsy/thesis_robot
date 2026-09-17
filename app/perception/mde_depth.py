@@ -81,16 +81,10 @@ class MDE_Depth:
         # fit each angle from angles to each bin_idx, shape (N,)
         bin_idx = np.floor((angles + fov_x / 2) / ray_theta).astype(int)
 
-        # Camera sits cam_t_y ahead of the robot's center along its forward axis, so
-        # dir_range is measured from the wrong origin. Recover the true distance from
-        # the robot's center via law of cosines on the (robot center, camera, point)
-        # triangle, using the known offset cam_t_y and the camera bearing `angles`.
-        point_ranges = np.sqrt(dir_range**2 + cam_t_y**2 + 2 * dir_range * cam_t_y * np.cos(angles)) #math confirmed
-
-        valid = (bin_idx >= 0) & (bin_idx < n_rays) & (point_ranges <= max_range)
+        valid = (bin_idx >= 0) & (bin_idx < n_rays) & (dir_range <= max_range) #TODO check if dir_range, from camera is legit
         #compare elements of ranges (n_rays,) at indices bin_idx[valid]
         #with point_ranges[valid] at those indices
-        np.minimum.at(ranges, bin_idx[valid], point_ranges[valid])
+        np.minimum.at(ranges, bin_idx[valid], dir_range[valid])
         return ranges
 
     def frame_to_ray_casting(self, frame, n_rays=16, max_range=0.6, delete_ground=True) -> np.ndarray:

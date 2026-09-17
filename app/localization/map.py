@@ -4,19 +4,19 @@ import json
 
 '''
 Map is an occupancy grid with 0 for free, 1 for occupied.
-0,0 start at the bottom left corner, the outer perimeter occupy cells the first and last rows and columns
+0,0 is the bottom left corner of the grid itself -- there is no implicit perimeter wall,
+so any boundary wall has to be a wall segment in the JSON like any other.
 '''
 class OccupancyGrid:
-    def __init__(self, internal_width, internal_length, cell_size, default_value=0.5):
-        #total size of map is internal size plus the walls
-        self.width = float(internal_width + cell_size*2) 
-        self.length = float(internal_length + cell_size*2)
+    def __init__(self, width, length, cell_size, default_value=0.5):
+        self.width = float(width)
+        self.length = float(length)
         self.cell_size = float(cell_size)
-        
+
         # Calculate grid dimensions based on map size and cell resolution
         self.cols = math.ceil(self.width / self.cell_size)
         self.rows = math.ceil(self.length / self.cell_size)
-        
+
         # Initialize the internal grid. dtype is forced to float64 rather than inferred
         # from default_value: np.full infers int64 when default_value is a plain int (the
         # common call pattern is default_value=0), which would silently truncate every
@@ -24,28 +24,18 @@ class OccupancyGrid:
         # margin, anything short of exactly 0 or 1.
         self.data = np.full((self.rows, self.cols), default_value, dtype=np.float64)
 
-        # Fill the outer perimeter (walls) with 1
-        self.data[0, :] = 1
-        self.data[-1, :] = 1
-        self.data[:, 0] = 1
-        self.data[:, -1] = 1
-
     def world_to_grid(self, x, y):
-        """
-        Converts physical coordinates (meters) to 2D array indices. Accepts scalars or
-        arrays; floor_divide so negative coordinates round toward -infinity rather than
-        truncating toward zero.
-        """
-        #add self.cell_size to account for the perimeter wall
-        col = np.floor_divide(x + self.cell_size, self.cell_size).astype(int)
-        row = np.floor_divide(y + self.cell_size, self.cell_size).astype(int)
+        # round before floor: (0.35) / 0.025 is 13.999999999999998 in floats, which would
+        # put an exact cell-boundary coordinate one cell short
+        col = np.floor(np.round(x / self.cell_size, 9)).astype(int)
+        row = np.floor(np.round(y / self.cell_size, 9)).astype(int)
         return row, col
+
 
     def grid_to_world(self, row, col):
         """Returns the physical coordinates (meters) at the center of a grid cell."""
-        # subtract self.cell_size to account for perimeter thickness being added
-        x = (col * self.cell_size) + (self.cell_size / 2.0) - self.cell_size
-        y = (row * self.cell_size) + (self.cell_size / 2.0) - self.cell_size
+        x = (col * self.cell_size) + (self.cell_size / 2.0)
+        y = (row * self.cell_size) + (self.cell_size / 2.0)
         return x, y
 
     # verified, have not tested
@@ -71,57 +61,6 @@ class OccupancyGrid:
         occupied = self.data[np.clip(row, 0, self.rows - 1), np.clip(col, 0, self.cols - 1)] > occ_threshold
         return inside & ~occupied
 
-    # verified, have not tested
-    def ray_cast_batch(self, origins, headings, max_range, occ_threshold=0.8):
-        """
-        Marches M rays through the grid and returns the distance to the first occupied cell.
-
-        Fixed-step marching rather than a true DDA: every ray takes the same number of
-        steps, so the whole fan is one numpy loop instead of M variable-length traversals.
-        The step is cell_size/3 so a one-cell-thick wall cannot be stepped over even when
-        crossed diagonally; the cost is that ranges are quantized to that step.
-
-        Args:
-            origins (np.ndarray): ray start points in meters, shape (M, 2).
-            headings (np.ndarray): world-frame ray directions in radians, CCW from +x, shape (M,).
-            max_range (float): distance at which an un-hit ray is reported.
-            occ_threshold (float): cells strictly above this block a ray. The default lets
-                                   the constructor's 0.5 "unknown" fill stay transparent.
-        Returns:
-            ranges (np.ndarray): shape (M,), float32, distance in meters, max_range if nothing hit.
-        """
-        origins = np.asarray(origins, dtype=np.float64).reshape(-1, 2)
-        headings = np.asarray(headings, dtype=np.float64).reshape(-1)
-
-        step = self.cell_size / 3.0
-        n_steps = int(math.ceil(max_range / step))
-
-        ox, oy = origins[:, 0], origins[:, 1] #shape (M,)
-        dx, dy = np.cos(headings) * step, np.sin(headings) * step #per-step delta, shape (M,)
-
-        ranges = np.full(headings.shape[0], max_range, dtype=np.float32)
-        alive = np.ones(headings.shape[0], dtype=bool) #rays that have not hit anything yet
-
-        for i in range(1, n_steps + 1):
-            #sample the point i steps along every ray at once
-            px = ox + dx * i
-            py = oy + dy * i
-
-            row, col = self.world_to_grid(px, py)
-
-            outside = (col < 0) | (col >= self.cols) | (row < 0) | (row >= self.rows)
-            blocked = self.data[np.clip(row, 0, self.rows - 1), np.clip(col, 0, self.cols - 1)] > occ_threshold
-
-            #a ray leaving the grid is treated as a hit, the perimeter ring means this is rare
-            hit = alive & (outside | blocked)
-            ranges[hit] = min(i * step, max_range)
-            alive &= ~hit
-
-            if not alive.any():
-                break
-
-        return ranges
-
     def add_wall(self, x1, y1, x2, y2, margin=0.7):
         """
         Marks a one-cell-thick straight wall segment (in meters) as occupied, then raises
@@ -142,13 +81,22 @@ class OccupancyGrid:
         else:
             raise ValueError("Wall segment must be axis-aligned: x1 == x2 or y1 == y2")
 
+        # Clip to the grid before using these as slice bounds -- a negative row/col (a
+        # point before the origin) would otherwise wrap around from the end of the array
+        # instead of being dropped, silently corrupting cells on the opposite edge.
+        row_lo, row_hi = np.clip([row_lo, row_hi], 0, self.rows - 1)
+        col_lo, col_hi = np.clip([col_lo, col_hi], 0, self.cols - 1)
+
         self.data[row_lo:row_hi + 1, col_lo:col_hi + 1] = 1
+
+        offset = [(0,1), (0,-1), (1,0), (-1,0), (-1,-1), (-1,1), (1,-1), (1,1)]
 
         #4-connected neighbour of every wall cell, one cell out in each direction. A plain
         #loop is fine here, add_wall only runs a handful of times at map construction.
         for row in range(row_lo, row_hi + 1):
             for col in range(col_lo, col_hi + 1):
-                for nr, nc in ((row - 1, col), (row + 1, col), (row, col - 1), (row, col + 1)):
+                for o_r, o_c in offset:
+                    nr, nc = row + o_r, col + o_c
                     if 0 <= nr < self.rows and 0 <= nc < self.cols:
                         self.data[nr, nc] = max(self.data[nr, nc], margin)
 
@@ -158,12 +106,14 @@ class OccupancyGrid:
         Builds a fully populated grid from a single JSON map file (shared by both laptop
         and Pi), rather than constructing the grid and adding walls as separate steps.
 
-        Expected format:
+        Expected format (width/length are the full grid extent -- include boundary walls
+        explicitly in "walls" if you want them occupied, there is no implicit perimeter):
         {
-          "internal_width": 1.07,
-          "internal_length": 1.78,
+          "width": 1.12,
+          "length": 1.83,
           "cell_size": 0.025,
           "walls": [
+            {"x1": 0.0, "y1": 0.0, "x2": 1.12, "y2": 0.0},
             {"x1": 0.05, "y1": 0.2, "x2": 0.3, "y2": 0.2},
             {"x1": 0.1, "y1": 0.0, "x2": 0.1, "y2": 0.5}
           ]
@@ -178,7 +128,7 @@ class OccupancyGrid:
         with open(filepath, "r") as f:
             layout = json.load(f)
 
-        grid = cls(layout["internal_width"], layout["internal_length"], layout["cell_size"], default_value)
+        grid = cls(layout["width"], layout["length"], layout["cell_size"], default_value)
         for wall in layout.get("walls", []):
             grid.add_wall(wall["x1"], wall["y1"], wall["x2"], wall["y2"])
         return grid
