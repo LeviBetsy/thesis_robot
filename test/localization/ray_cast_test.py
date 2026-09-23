@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 import argparse
 import math
@@ -12,6 +12,8 @@ from app.localization.map import OccupancyGrid
 from app.localization.particle import Particle
 from app.localization.ray_caster import RayCaster
 from app.localization.visualize_map import MapVisualizer
+from app.util.config import Config
+from app.robot_module.robot import Robot
 
 '''
 Visual check of RayCaster.predict against config/map/map1.json.
@@ -31,13 +33,9 @@ Run from anywhere:
     python test/ray_cast_test.py --save out.png
 '''
 
-MAP_PATH = os.path.join(os.path.dirname(__file__), "../config/map/map1.json")
-
-FOV_X = 1.2228      # robot.camera.fov_x, hardcoded so this test does not need the camera / calibration
-N_RAYS = 16
-CAM_FORWARD = 0.07  # robot.cam_t[1]
-MAX_RANGE = 0.4
-
+config = Config.load("./config/robot_config.json")
+robot = Robot(config)
+MAP_PATH = "./config/map/map_wall.json"
 # poses in meters / radians CCW from +x, each with what it should show
 TEST_POSES = [
     (Particle(0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
@@ -47,6 +45,7 @@ TEST_POSES = [
     (Particle(0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
     (Particle(0.85, 1.30, math.radians(135)), "diagonal, mixed hits and misses"),
     (Particle(0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
+    # (Particle(0.55, 0.45, math.pi / 2), "something")
 ]
 
 # BGR, one per pose
@@ -79,7 +78,7 @@ class RayCastVisualizer(MapVisualizer):
             for k in range(z.shape[1]):
                 start = to_px(*origins[i, k])
                 end = to_px(*hits[i, k])
-                missed = z[i, k] >= MAX_RANGE - 1e-6
+                missed = z[i, k] >= config.ray_cast.max_range - 1e-6
                 cv2.line(image, start, end, (170, 170, 170) if missed else color, 1, lineType=cv2.LINE_AA)
                 if not missed:
                     cv2.circle(image, end, 3, color, -1, lineType=cv2.LINE_AA)
@@ -101,7 +100,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     grid = OccupancyGrid.from_json(MAP_PATH, default_value=0)
-    caster = RayCaster(grid, FOV_X, n_rays=N_RAYS, max_range=MAX_RANGE, cam_forward=CAM_FORWARD)
+    caster = RayCaster(grid, robot.camera, config)
     poses = np.array([p.pose() for p, _ in TEST_POSES]) #shape (N, 3)
 
     z = caster.predict(poses)                #shape (N, n_rays), meters from the camera

@@ -4,7 +4,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 
 import argparse
 import math
-from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -12,14 +11,12 @@ import numpy as np
 from app.localization.map import OccupancyGrid
 from app.localization.mcl import MCLLocalization
 from app.localization.visualize_map import MapVisualizer
+from app.robot_module.robot import Robot
+from app.util.config import Config
 
 '''
-Visual check of the measurement stage of MCLLocalization against config/map/map1.json.
-
-No robot, no laptop, no ZMQ: the "real" scan is faked by ray casting from a known TRUE_POSE
-and adding gaussian noise, which is exactly what the MDE fan is supposed to deliver. A wide
-gaussian cloud of particles is scattered around that pose and scored against it, so if the
-beam model is right the cloud's colour should peak on / near the true pose.
+Visual check of the measurement stage of MCLLocalization. Scatter some particles and visualize 
+their weights in comparison with the true pose
 
 Drawn:
     green circle + line      the true pose and its heading
@@ -29,32 +26,34 @@ Drawn:
                              the ordering of the cloud, not absolute confidence.
     black ring               the highest weight particle
 
+Every number except the test scenario itself comes from config/robot_config.json via a real
+Robot, so this exercises the same fov_x / n_rays / max_range the Pi and the laptop run with.
+
 Run from anywhere:
     python test/localization/measurement_model_test.py           # serve on http://localhost:8001
     python test/localization/measurement_model_test.py --save out.png
     python test/localization/measurement_model_test.py --seed 7
+
+The config defaults (config.mcl) are tuned for tracking, so the cloud starts tight and every
+particle scores about the same. To actually watch the weights separate, spread it out:
+    python test/localization/measurement_model_test.py --n-particles 30 --sigma-x 0.22 --sigma-y 0.22 --sigma-theta 45
 '''
 
-MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map1.json")
+CONFIG_PATH = "./config/robot_config.json"
+MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map_wall.json")
 
-FOV_X = 1.2228      # robot.camera.fov_x, hardcoded so this test does not need the camera / calibration
-N_RAYS = 16
-CAM_FORWARD = 0.07  # robot.cam_t[1]
-MAX_RANGE = 0.6
-
-N_PARTICLES = 30
-SIGMA_XY = 0.22     # deliberately wide, the point is to see the weights separate
-SIGMA_THETA = math.radians(45)
-
-# meters / radians CCW from +x. Facing +y at the y=0.73 wall, so the scan has real structure
-# in it (wall dead ahead, open floor off to the sides) rather than 16 identical max ranges.
-TRUE_POSE = (0.55, 0.45, math.pi / 2)
+# The test scenario, not a tunable: meters / radians CCW from +x. Facing +y at the y=0.73
+# wall of map1, so the scan has real structure in it (wall dead ahead, open floor off to the
+# sides) rather than 16 identical max ranges. config.mcl.init_pose is not used here because
+# it is a placeholder at the map origin, which is inside the perimeter wall.
+TRUE_POSE = (0.55, 0.7, math.pi / 2)
 
 SCAN_NOISE = 0.02   # meters, stands in for monocular depth error on the faked scan
 
 TRUE_COLOR = (0, 160, 0)
 WEAK_COLOR = np.array([230, 190, 120], dtype=np.float64)  # BGR, lowest weight
 STRONG_COLOR = np.array([0, 0, 255], dtype=np.float64)    # BGR, highest weight
+#for drawing
 HEADING_LEN = 0.05   # meters, length of the heading stub drawn on each particle
 LOG_SPAN = 20.0      # a particle e^-20 times as likely as the best one draws fully pale
 
@@ -77,13 +76,6 @@ def color_strength(weights):
         return weights
     logw = np.log(np.maximum(weights, 1e-300))
     return 1.0 - np.clip((logw.max() - logw) / LOG_SPAN, 0.0, 1.0)
-
-
-def stub_robot(fov_x, cam_forward):
-    """MCLLocalization only reads robot.camera.fov_x and robot.cam_t[1], so a real Robot
-    (and its calibration npz) is not needed to exercise the filter."""
-    return SimpleNamespace(camera=SimpleNamespace(fov_x=fov_x),
-                           cam_t=np.array([0.0, cam_forward, 0.11]))
 
 
 class ParticleWeightVisualizer(MapVisualizer):
@@ -147,30 +139,50 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save", help="write the render to this PNG instead of serving it")
     parser.add_argument("--seed", type=int, default=0, help="rng seed for the cloud and the scan noise")
+    parser.add_argument("--n-particles", type=int, help="override config.mcl.n_particles")
+    parser.add_argument("--sigma-x", type=float, help="cloud spread in x, meters, override config.mcl.init_sigma_x")
+    parser.add_argument("--sigma-y", type=float, help="cloud spread in y, meters, override config.mcl.init_sigma_y")
+    parser.add_argument("--sigma-theta", type=float, help="cloud spread in DEGREES, override config.mcl.init_sigma_theta")
     args = parser.parse_args()
-
     np.random.seed(args.seed)
 
+    config = Config.load(CONFIG_PATH)
+    robot = Robot(config)  # carries the real camera calibration, so fov_x is the measured one
+
+    # Overrides are written back into the config so MCLLocalization still reads every number
+    # from one place, rather than the test passing some of them in behind its back.
+    if args.n_particles is not None:
+        config.mcl.n_particles = args.n_particles
+    sigma_x = args.sigma_x if args.sigma_x is not None else config.mcl.init_sigma_x
+    sigma_y = args.sigma_y if args.sigma_y is not None else config.mcl.init_sigma_y
+    sigma_theta = math.radians(args.sigma_theta) if args.sigma_theta is not None else config.mcl.init_sigma_theta
+
+    n_particles = config.mcl.n_particles
+    max_range = config.ray_cast.max_range
+
     grid = OccupancyGrid.from_json(MAP_PATH, default_value=0)
-    mcl = MCLLocalization(stub_robot(FOV_X, CAM_FORWARD), grid,
-                          n_particles=N_PARTICLES, n_rays=N_RAYS, max_range=MAX_RANGE)
+    mcl = MCLLocalization(robot, grid, config)
 
     # the scan the MDE pipeline would have returned from the true pose, plus sensor noise
     true_pose = np.array([TRUE_POSE])
     z = mcl.caster.predict(true_pose)[0].astype(np.float64)
-    z = np.clip(z + np.random.normal(0.0, SCAN_NOISE, z.shape[0]), 0.0, MAX_RANGE)
+    # z = np.clip(z + np.random.normal(0.0, SCAN_NOISE, z.shape[0]), 0.0, max_range) #adding sensor noise
 
-    mcl.init_particles_gaussian(*TRUE_POSE, sigma_xy=SIGMA_XY, sigma_theta=SIGMA_THETA)
+    mcl.init_particles_gaussian(*TRUE_POSE, sigma_x=sigma_x, sigma_y=sigma_y,
+                                sigma_theta=sigma_theta,
+                                max_attempts=config.mcl.init_max_attempts)
     mcl.measurement_update(z)
 
     poses, weights = mcl.particle_set.snapshot()
 
     print(f"true pose: x={TRUE_POSE[0]:.3f} y={TRUE_POSE[1]:.3f} theta={math.degrees(TRUE_POSE[2]):.1f}deg")
+    print(f"fov_x: {math.degrees(robot.camera.fov_x):.1f}deg, {config.ray_cast.n_rays} rays, max_range {max_range} m")
     print(f"scan (m): {np.round(z, 3)}")
-    print(f"{N_PARTICLES} particles, sigma_xy={SIGMA_XY} m, sigma_theta={math.degrees(SIGMA_THETA):.0f}deg")
-    print(f"ESS: {mcl.effective_sample_size():.2f} / {N_PARTICLES}")
+    print(f"{n_particles} particles, sigma_x={sigma_x} m, sigma_y={sigma_y} m, "
+          f"sigma_theta={math.degrees(sigma_theta):.0f}deg")
+    print(f"ESS: {mcl.effective_sample_size():.2f} / {n_particles}")
     print(f"weighted mean pose: {tuple(round(v, 3) for v in mcl.estimate_mean_pose())}")
-    print(f"best particle:      {tuple(round(v, 3) for v in mcl.estimate_map())}")
+    print(f"best particle:      {tuple(round(v, 3) for v in mcl.estimate_best_particle())}")
 
     print("\n rank  weight     x      y    theta   err_xy")
     for rank, i in enumerate(np.argsort(weights)[::-1]):
@@ -180,9 +192,12 @@ if __name__ == "__main__":
 
     origins, headings = mcl.caster.rays(true_pose)
     hits = origins[0] + z[:, None] * np.stack([np.cos(headings[0]), np.sin(headings[0])], axis=-1)
-    missed = z >= MAX_RANGE - 1e-6
+    missed = z >= max_range - 1e-6
 
-    vis = ParticleWeightVisualizer(grid)
+    vconfig = config.visualizer
+    vis = ParticleWeightVisualizer(grid, host=vconfig.host, port=vconfig.port,
+                                   max_size=vconfig.max_size, grid_lines=vconfig.grid_lines,
+                                   refresh_ms=vconfig.refresh_ms)
     vis.set_cloud(poses, weights, TRUE_POSE, origins[0], hits, missed)
     if args.save:
         print(f"\nsaved {vis.save(args.save)}")

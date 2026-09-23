@@ -12,7 +12,7 @@ import cv2
 from app.robot_module.robot import Robot
 from app.robot_module.uart import MSP432Uart
 from app.control.keyboard_controller_ssh import RobotController
-from app.localization.odometry import OdometryLocalization
+from app.robot_module.odometry import OdometryLocalization
 from app.stream.zmq_stream import VideoStreamer, RangeReceiver
 #********************************************** IMPORTS **********************************************
 

@@ -1,8 +1,7 @@
 {
     "paths": {
         "camera_calib": "fisheye_calib.npz",
-        "z_real": "z_real_fix_checker_size.npz",
-        "map": "map/map1.json"
+        "z_real": "z_real_fix_checker_size.npz"
     },
     "robot": {
         "camera_tilt_deg": -30.0,
@@ -24,9 +23,8 @@
     },
     "ray_cast": {
         "n_rays": 16,
-        "max_range": 0.6,
-        "occ_threshold": 0.8,
-        "fov_x": 0.0
+        "max_range": 0.4,
+        "occ_threshold": 0.8
     },
     "measurement_model": {
         "sigma_hit": 0.08,
@@ -40,7 +38,8 @@
     },
     "mcl": {
         "n_particles": 500,
-        "init_sigma_xy": 0.05,
+        "init_sigma_x": 0.05,
+        "init_sigma_y": 0.05,
         "init_sigma_theta": 0.1,
         "init_max_attempts": 50,
         "init_pose": [
@@ -48,7 +47,11 @@
             0.0,
             0.0
         ],
-        "resample_ess_ratio": 0.5
+        "motion_alpha1": 0.1,
+        "motion_alpha2": 0.5,
+        "motion_alpha3": 0.1,
+        "motion_alpha4": 0.02,
+        "motion_min_trans": 0.001
     },
     "stream": {
         "laptop_host": "127.0.0.1",

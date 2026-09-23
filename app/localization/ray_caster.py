@@ -6,6 +6,8 @@ import numpy as np
 import math
 
 from app.localization.map import OccupancyGrid
+from app.robot_module.camera import Camera
+from app.util.config import Config
 
 '''
 Turns a hypothesised pose into the n_rays ranges the MDE pipeline would report if the
@@ -19,15 +21,15 @@ filter computes is biased. The contract it defines:
   - bearings are measured from the CAMERA
   - the returned range is also from the CAMERA, not the robot centre
 '''
+#VERIFIED and TESTED
 class RayCaster:
-    def __init__(self, grid: OccupancyGrid, fov_x, n_rays=16, max_range=0.6,
-                 cam_forward=0.07, occ_threshold=0.8):
+    def __init__(self, grid: OccupancyGrid, camera: Camera, config: Config):
         self.grid = grid
-        self.fov_x = float(fov_x)
-        self.n_rays = int(n_rays)
-        self.max_range = float(max_range)
-        self.cam_forward = float(cam_forward) #camera offset ahead of robot centre, meters
-        self.occ_threshold = float(occ_threshold) #cells strictly above this block a ray
+        self.fov_x = camera.fov_x
+        self.n_rays = int(config.ray_cast.n_rays)
+        self.max_range = float(config.ray_cast.max_range)
+        self.cam_forward = float(config.robot.cam_t[1]) #camera offset ahead of robot centre, meters
+        self.occ_threshold = float(config.ray_cast.occ_threshold) #cells strictly above this block a ray
 
         # Centre bearing of each ray bin, matching pcd_to_ray_casting's binning. That function
         # assigns a point to bin floor((angle + fov_x/2) / ray_w), so bin k spans
@@ -35,13 +37,7 @@ class RayCaster:
         ray_w = self.fov_x / self.n_rays
         self.bearings = -self.fov_x / 2.0 + (np.arange(self.n_rays) + 0.5) * ray_w #shape (n_rays,)
 
-    @classmethod
-    def from_robot(cls, robot, grid: OccupancyGrid, n_rays=16, max_range=0.6):
-        """Builds a caster whose FOV and camera offset come straight from the Robot."""
-        return cls(grid, robot.camera.fov_x, n_rays=n_rays, max_range=max_range,
-                   cam_forward=robot.cam_t[1])
-
-    # verified, have not tested
+    # verified and TESTED
     def cast(self, origins, headings) -> np.ndarray:
         """
         Marches M rays through the grid and returns the distance to the first occupied cell.

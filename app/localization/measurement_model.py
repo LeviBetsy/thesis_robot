@@ -5,8 +5,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 import numpy as np
 import math
 from scipy.stats import norm
+from app.util.config import Config
 
-#TODO: VERIFY
+
 
 
 '''
@@ -27,19 +28,20 @@ from scipy.stats import norm
     particle within a couple of updates. `alpha` tempers that: it is the knob to turn
     when particle depletion shows up in testing.
 '''
+# VERIFIED, HAVE NOT TESTED
 class BeamSensorModel:
-    def __init__(self, max_range, sigma_hit=0.08, lambda_short=2.0,
-                 z_hit=0.65, z_short=0.05, z_max=0.20, z_rand=0.10, alpha=0.25):
-        self.max_range = float(max_range)
-        self.sigma_hit = float(sigma_hit)
-        self.lambda_short = float(lambda_short)
-        self.alpha = float(alpha)
+    def __init__(self, config: Config):
+        mconfig = config.measurement_model
+        self.max_range = float(config.ray_cast.max_range)
+        self.sigma_hit = float(mconfig.sigma_hit)
+        self.lambda_short = float(mconfig.lambda_short)
+        self.alpha = float(mconfig.alpha)
 
-        total = z_hit + z_short + z_max + z_rand
-        self.z_hit = z_hit / total
-        self.z_short = z_short / total
-        self.z_max = z_max / total
-        self.z_rand = z_rand / total
+        total = mconfig.z_hit + mconfig.z_short + mconfig.z_max + mconfig.z_rand
+        self.z_hit = mconfig.z_hit / total
+        self.z_short = mconfig.z_short / total
+        self.z_max = mconfig.z_max / total
+        self.z_rand = mconfig.z_rand / total
 
         # A reading within this of max_range is treated as "no return" by the p_max spike.
         # pcd_to_ray_casting fills empty bins with EXACTLY max_range (np.full) and a real
@@ -50,6 +52,7 @@ class BeamSensorModel:
         # TODO: monocular depth error grows with distance, so sigma = sigma_hit + sigma_scale*z_pred
         # is the natural extension here if the residuals turn out range-dependent in testing.
 
+    # VERIFIED, DID NOT TEST
     def log_likelihood(self, z, z_pred) -> np.ndarray:
         """
         Per-particle log p(z | x, map), summed over beams.
@@ -94,6 +97,7 @@ class BeamSensorModel:
 
         return np.log(np.maximum(p, 1e-12)).sum(axis=1)
 
+    # VERIFIED, NOT TESTED
     def weights(self, z, z_pred) -> np.ndarray:
         """
         Normalised particle weights for one scan.

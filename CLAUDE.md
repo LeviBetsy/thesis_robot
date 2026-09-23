@@ -3,3 +3,5 @@ The architecture of my robot contains a Pi streaming camera frame to the laptop 
 The Pi runs /tests/ python files and the laptop runs /laptop/ python file
 
 dont bother with the app/yolo folder, it is an archived section that never gets used
+
+if you ever write test case or __main__ functionality, always create a Robot instance and loading the appropriate configs, never hardcode those config numbers, such as the fov_x of the camera
