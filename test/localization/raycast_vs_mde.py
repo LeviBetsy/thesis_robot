@@ -36,7 +36,7 @@ Run on the Pi:
 '''
 
 CONFIG_PATH = "./config/robot_config.json"
-MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map4.json")
+MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map2.json")
 
 # Where the robot is physically placed for the test: meters / degrees CCW from +x.
 # Arbitrary for now; measure the real placement and pass it with --pose.
