@@ -99,7 +99,7 @@ if __name__ == "__main__":
     parser.add_argument("--save", help="write the render to this PNG instead of serving it")
     args = parser.parse_args()
 
-    grid = OccupancyGrid.from_json(MAP_PATH, default_value=0)
+    grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0)
     caster = RayCaster(grid, robot.camera, config)
     poses = np.array([p.pose() for p, _ in TEST_POSES]) #shape (N, 3)
 

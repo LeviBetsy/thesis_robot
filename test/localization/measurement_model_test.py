@@ -160,7 +160,7 @@ if __name__ == "__main__":
     n_particles = config.mcl.n_particles
     max_range = config.ray_cast.max_range
 
-    grid = OccupancyGrid.from_json(MAP_PATH, default_value=0)
+    grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0)
     mcl = MCLLocalization(robot, grid, config)
 
     # the scan the MDE pipeline would have returned from the true pose, plus sensor noise

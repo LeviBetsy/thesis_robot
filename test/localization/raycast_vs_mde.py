@@ -84,7 +84,7 @@ if __name__ == "__main__":
     no_return = config.ray_cast.max_range - config.measurement_model.max_eps
 
     #Map and the particle's predicted scan, fixed for the whole run since the robot doesn't move
-    grid = OccupancyGrid.from_json(args.map, default_value=0)
+    grid = OccupancyGrid.from_json(args.map, config, default_value=0)
     caster = RayCaster(grid, camera, config)
     particle = Particle(args.pose[0], args.pose[1], math.radians(args.pose[2]))
     pose = np.array([particle.pose()]) #shape (1, 3)

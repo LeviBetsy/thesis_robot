@@ -132,33 +132,3 @@ class RayCaster:
         origins, headings = self.rays(poses)
         d_cam = self.cast(origins.reshape(-1, 2), headings.reshape(-1))
         return d_cam.reshape(headings.shape).astype(np.float32)
-
-
-if __name__ == "__main__":
-    # Geometry sanity check against config/map/map1.json, which has a perimeter wall at y=0
-    # and a horizontal wall running from x=0.0 to x=0.365 at y=0.37.
-    grid = OccupancyGrid.from_json("config/map/map1.json", default_value=0)
-    caster = RayCaster(grid, fov_x=1.2228, n_rays=16, max_range=0.6, cam_forward=0.07)
-
-    print("bearings (deg, index 0 is leftmost):")
-    print(np.round(np.degrees(caster.bearings), 2))
-
-    # Facing -y from (0.20, 0.20) at the perimeter wall. Its cell spans y in [0, 0.025), so
-    # the occupied face is at y=0.025. The camera sits 0.07 ahead at y=0.13, so the centre
-    # beams must read ~0.105 to within one march step (cell_size/3 = 8 mm).
-    z = caster.predict(np.array([(0.20, 0.20, -math.pi / 2)]))[0]
-    print("\nfacing the perimeter wall (-y) from (0.20, 0.20), expect centre ~0.105:")
-    print(np.round(z, 3))
-
-    # Facing +y at the y=0.37 wall, whose cell starts at y=0.35; camera at y=0.27.
-    z2 = caster.predict(np.array([(0.20, 0.20, math.pi / 2)]))[0]
-    print("\nfacing the y=0.37 wall (+y) from (0.20, 0.20), expect centre ~0.080:")
-    print(np.round(z2, 3))
-
-    # Facing +x along open floor. This one pins down the BEARING SIGN, which is the easiest
-    # thing to get backwards: the robot is 0.20 m above the bottom perimeter wall, which
-    # sits on its RIGHT when facing +x. So the high indices (the right-hand beams) must be
-    # the short ones. If the low indices shorten instead, the theta/bearing sign is flipped.
-    z3 = caster.predict(np.array([(0.20, 0.20, 0.0)]))[0]
-    print("\nfacing open floor (+x) from (0.20, 0.20), expect the RIGHT beams to shorten:")
-    print(np.round(z3, 3))

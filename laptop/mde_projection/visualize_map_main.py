@@ -4,9 +4,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 from app.localization.visualize_map import MapVisualizer
 from app.localization.map import OccupancyGrid
 from app.stream.zmq_stream import ParticleReceiver
+from app.util.config import Config
 
 def visualize_map():
-    map = OccupancyGrid.from_json("config/map/map0.json", default_value=0)
+    config = Config.load()
+    map = OccupancyGrid.from_json("config/map/map0.json", config, default_value=0)
 
     map_visualizer = MapVisualizer(map)
     def call_back(p):

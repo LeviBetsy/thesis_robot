@@ -23,6 +23,10 @@
         "ground_z": 0.02,
         "jpeg_quality": 90
     },
+    "map": {
+        "placeable_margin": 0.7,
+        "placeable_radius": 0.05
+    },
     "ray_cast": {
         "n_rays": 16,
         "max_range": 0.4,

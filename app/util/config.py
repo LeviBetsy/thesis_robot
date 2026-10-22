@@ -53,6 +53,18 @@ class PerceptionConfig:
 
 
 @dataclass
+class MapConfig:
+    """
+    The buffer OccupancyGrid.add_wall paints around every wall. A particle sitting closer
+    than placeable_radius to a wall is a pose the robot's body could not actually occupy,
+    so the grid marks those cells and is_placeable rejects them.
+    """
+    placeable_margin: float    # value written into the buffer cells; must exceed the
+                               # occ_threshold is_placeable uses or it buffers nothing
+    placeable_radius: float    # meters of clearance a particle needs from any wall cell
+
+
+@dataclass
 class RayCastConfig:
     """
     The ray fan. These MUST be identical on both machines: the laptop bins its point cloud
@@ -132,6 +144,7 @@ _SECTIONS = {
     "paths": Paths,
     "robot": RobotConfig,
     "perception": PerceptionConfig,
+    "map": MapConfig,
     "ray_cast": RayCastConfig,
     "measurement_model": MeasurementModelConfig,
     "mcl": MCLConfig,
@@ -146,6 +159,7 @@ class Config:
     paths: Paths
     robot: RobotConfig
     perception: PerceptionConfig
+    map: MapConfig
     ray_cast: RayCastConfig
     measurement_model: MeasurementModelConfig
     mcl: MCLConfig

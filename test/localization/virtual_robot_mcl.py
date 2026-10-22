@@ -384,7 +384,7 @@ if __name__ == "__main__":
     sigma_y = args.sigma_y if args.sigma_y is not None else config.mcl.init_sigma_y
     sigma_theta = math.radians(args.sigma_theta) if args.sigma_theta is not None else config.mcl.init_sigma_theta
 
-    grid = OccupancyGrid.from_json(MAP_PATH, default_value=0)
+    grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0)
     rover = VirtualRobot(robot, grid, START_POSE, args.speed, math.radians(args.turn_rate))
 
     # The rover's own Odometry is the filter's motion source, so on_scan consumes exactly

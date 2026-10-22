@@ -14,6 +14,7 @@ from app.control.keyboard_controller_ssh import RobotController
 from app.localization.map import OccupancyGrid
 from app.localization.mcl import MCLLocalization
 from app.stream.zmq_stream import VideoStreamer, ParticleStreamer, RangeReceiver
+from app.util.config import Config
 #********************************************** IMPORTS **********************************************
 
 
@@ -22,7 +23,8 @@ msp432_uart = MSP432Uart()
 msp432_uart.start_receiving() #THREAD 1: to listen to odometry data from MSP432 and fill buffer
 
 #Robot
-robot = Robot("fisheye_calib.npz")
+config = Config.load()
+robot = Robot(config)
 
 # #Keyboard Controller
 # controller = RobotController(msp432_uart.send_command)
@@ -39,7 +41,7 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.h)
 # TODO: account for latency from returning laptop, might not be where we are, actually keep track of an accumulated motion for that
 
 # Monte Carlo Localization against the known map.
-grid = OccupancyGrid.from_json("config/map/map0.json", default_value=0)
+grid = OccupancyGrid.from_json("config/map/map0.json", config, default_value=0)
 mcl = MCLLocalization(robot=robot, grid=grid, n_particles=100)
 
 mcl.init_particles_gaussian(0.535, 0.89, math.pi/2, sigma_xy=0.1, sigma_theta=0.5)

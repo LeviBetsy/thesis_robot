@@ -1,6 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
 import numpy as np
 import math
 import json
+
+from app.util.config import Config
 
 '''
 Map is an occupancy grid with 0 for free, 1 for occupied.
@@ -38,7 +44,7 @@ class OccupancyGrid:
         y = (row * self.cell_size) + (self.cell_size / 2.0)
         return x, y
 
-    # verified, have not tested
+    # tested
     def is_placeable(self, x, y, occ_threshold=0.5):
         """
         Checks whether world points land on a non-occupied cell inside the map.
@@ -61,14 +67,22 @@ class OccupancyGrid:
         occupied = self.data[np.clip(row, 0, self.rows - 1), np.clip(col, 0, self.cols - 1)] > occ_threshold
         return inside & ~occupied
 
-    def add_wall(self, x1, y1, x2, y2, margin=0.7):
+    # verified not tested
+    def add_wall(self, x1, y1, x2, y2, placeable_margin=0.7, placeable_radius=0.05):
         """
         Marks a one-cell-thick straight wall segment (in meters) as occupied, then raises
-        every cell directly adjacent to it (up/down/left/right, not diagonally) to at
-        least `margin` -- a one-cell safety buffer so a particle can't sit flush against a
-        wall. `margin` only ever raises a cell (max(current, margin)), so it never
-        overwrites the wall itself or a bigger margin left by another nearby wall.
+        every cell whose center lies within `placeable_radius` meters of a wall cell center
+        to at least `placeable_margin` -- the buffer that keeps a particle from sitting
+        closer to a wall than the robot physically can. `placeable_margin` only ever raises
+        a cell (max(current, placeable_margin)), so it never overwrites the wall itself or a
+        bigger margin left by another nearby wall.
         Segment must be axis-aligned (x1==x2 for a vertical wall, or y1==y2 for a horizontal wall).
+
+        Args:
+            x1, y1, x2, y2 (float): segment endpoints in meters.
+            placeable_margin (float): value written into the buffer cells. Keep it above the
+                                      occ_threshold is_placeable uses or it buffers nothing.
+            placeable_radius (float): meters of clearance a particle needs from a wall.
         """
         if x1 == x2:
             row_start, col = self.world_to_grid(x1, min(y1, y2))
@@ -89,19 +103,28 @@ class OccupancyGrid:
 
         self.data[row_lo:row_hi + 1, col_lo:col_hi + 1] = 1
 
-        offset = [(0,1), (0,-1), (1,0), (-1,0), (-1,-1), (-1,1), (1,-1), (1,1)]
+        # Widest a cell can sit from the wall on one axis and still be inside the radius.
+        # Rounded like world_to_grid: radius/cell_size on an exact multiple lands a hair
+        # under the integer in floats and would drop the outermost ring.
+        r_cells = int(math.floor(round(placeable_radius / self.cell_size, 9)))
 
-        #4-connected neighbour of every wall cell, one cell out in each direction. A plain
-        #loop is fine here, add_wall only runs a handful of times at map construction.
-        for row in range(row_lo, row_hi + 1):
-            for col in range(col_lo, col_hi + 1):
-                for o_r, o_c in offset:
-                    nr, nc = row + o_r, col + o_c
-                    if 0 <= nr < self.rows and 0 <= nc < self.cols:
-                        self.data[nr, nc] = max(self.data[nr, nc], margin)
+        band_row_lo, band_row_hi = max(row_lo - r_cells, 0), min(row_hi + r_cells, self.rows - 1)
+        band_col_lo, band_col_hi = max(col_lo - r_cells, 0), min(col_hi + r_cells, self.cols - 1)
+
+        rows = np.arange(band_row_lo, band_row_hi + 1)[:, None]
+        cols = np.arange(band_col_lo, band_col_hi + 1)[None, :]
+
+        # The wall is an axis-aligned block of cells, so the distance from any cell to the
+        # NEAREST wall cell is the per-axis overhang past the block, zero inside it.
+        d_row = np.maximum(np.maximum(row_lo - rows, rows - row_hi), 0)
+        d_col = np.maximum(np.maximum(col_lo - cols, cols - col_hi), 0)
+        within = np.hypot(d_row, d_col) * self.cell_size <= placeable_radius
+
+        band = self.data[band_row_lo:band_row_hi + 1, band_col_lo:band_col_hi + 1]
+        np.maximum(band, placeable_margin, out=band, where=within)
 
     @classmethod
-    def from_json(cls, filepath, default_value=0.5):
+    def from_json(cls, filepath, config: Config, default_value=0.5):
         """
         Builds a fully populated grid from a single JSON map file (shared by both laptop
         and Pi), rather than constructing the grid and adding walls as separate steps.
@@ -121,6 +144,8 @@ class OccupancyGrid:
 
         Args:
             filepath (str): path to the map JSON file.
+            config (Config): supplies the wall buffer, config.map.placeable_margin and
+                             config.map.placeable_radius, for every wall in the file.
             default_value (float): fill value for cells with no wall, forwarded to __init__.
         Returns:
             grid (OccupancyGrid): a new grid with every wall from the file already added.
@@ -130,5 +155,6 @@ class OccupancyGrid:
 
         grid = cls(layout["width"], layout["length"], layout["cell_size"], default_value)
         for wall in layout.get("walls", []):
-            grid.add_wall(wall["x1"], wall["y1"], wall["x2"], wall["y2"])
+            grid.add_wall(wall["x1"], wall["y1"], wall["x2"], wall["y2"],
+                          config.map.placeable_margin, config.map.placeable_radius)
         return grid
