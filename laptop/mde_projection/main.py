@@ -29,7 +29,7 @@ def real_time_stream(cv_show=False, visualize=False):
     try:
         while True:
             frame = display_frame[0]
-            if frame:
+            if frame is not None:
                 pcd = mde_depth.frame_to_pcd(frame)
                 if visualize: visualizer.update(pcd)
                 ray_cast = mde_depth.pcd_to_ray_casting(pcd, n_rays=config.ray_cast.n_rays,
@@ -84,9 +84,9 @@ def static_inspection():
     visualizer.close()
     cv2.destroyAllWindows()
 
-def static_process():
+def static_process(path):
     mde_depth = MDE_Depth(config)
-    frame = cv2.imread("./data/ref21.jpg")
+    frame = cv2.imread(path)
     visualizer = PointCloudVisualizer()
 
     pcd = mde_depth.frame_to_pcd(frame)
@@ -108,4 +108,4 @@ if __name__ == "__main__":
     # static_inspection()
     # real_time_stream(cv_show=True, visualize=True)
     real_time_stream()
-    # static_process()
+    # static_process("./data/ref23.jpg")

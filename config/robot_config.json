@@ -18,7 +18,7 @@
         "mde_encoder": "vits",
         "mde_device": "",
         "scale_group_n": 16,
-        "ground_z": 0.01,
+        "ground_z": 0.02,
         "jpeg_quality": 90
     },
     "ray_cast": {
