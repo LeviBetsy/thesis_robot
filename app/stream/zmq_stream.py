@@ -10,14 +10,13 @@ import cv2
 import numpy as np
 
 class VideoStreamer:
-    def __init__(self, fps, port=5003):
+    def __init__(self, port=5003):
         self.port = port
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         self.socket.setsockopt(zmq.SNDHWM, 2)
         self.socket.bind(f"tcp://*:{self.port}")
         print(f"ZeroMQ video streamer bound to tcp://*:{self.port}")
-        self.fps = fps
 
     def send_frame(self, frame):
         try:
@@ -204,14 +203,13 @@ class ParticleReceiver:
     Class for Streaming a numpy array of ray-cast ranges, shape (N,)
 '''
 class RangeStreamer:
-    def __init__(self, fps, port=5005):
+    def __init__(self, port=5005):
         self.port = port
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         self.socket.setsockopt(zmq.SNDHWM, 2)
         self.socket.bind(f"tcp://*:{self.port}")
         print(f"ZeroMQ range streamer bound to tcp://*:{self.port}")
-        self.fps = fps
 
     def send_range(self, arr: np.ndarray):
         try:

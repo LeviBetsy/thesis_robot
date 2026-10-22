@@ -111,7 +111,7 @@ if __name__ == "__main__":
         print(f"\n[scan {i}]")
         print_comparison(z_pred, z_mde, no_return)
 
-    streamer = VideoStreamer(fps=config.stream.video_fps, port=config.stream.video_port)
+    streamer = VideoStreamer(port=config.stream.video_port)
     range_receiver = RangeReceiver(host=config.stream.laptop_host, port=config.stream.range_port,
                                    callback=callback_new_range)
 
@@ -121,17 +121,11 @@ if __name__ == "__main__":
 
     try:
         while True:
-            loop_start = time.time()
-
+            # Free-running: cap.read() blocks until the next camera frame, so the camera paces this loop
             ret, frame = cap.read()
             if not ret:
                 raise RuntimeError("Can't capture video frame")
             streamer.send_frame(camera.undistort_fisheye(frame=frame))
-
-            # Making sure sending rate matches intended fps
-            sleep_time = (1.0 / streamer.fps) - (time.time() - loop_start)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
     except KeyboardInterrupt:
         print("\nstopping")
     except RuntimeError as e:

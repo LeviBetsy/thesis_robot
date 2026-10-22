@@ -4,6 +4,8 @@
         "z_real": "z_real_fix_checker_size.npz"
     },
     "robot": {
+        "cam_w_for_user_info_never_used": 640,
+        "cam_h_for_user_info_never_used": 480,
         "camera_tilt_deg": -30.0,
         "cam_t": [
             0.0,
@@ -59,8 +61,6 @@
         "video_port": 5003,
         "particle_port": 5004,
         "range_port": 5005,
-        "video_fps": 3,
-        "range_fps": 3,
         "particle_fps": 5
     },
     "uart": {

@@ -15,34 +15,72 @@ if root_path not in sys.path:
 
 
 class DepthAnythingONNXPredictor:
-    def __init__(self, onnx_model_path, device=None):
+    def __init__(self, onnx_model_path, device=None, input_size=(476, 644)):
         """
         Initialize the ONNX runtime session.
         onnx_model_path: Path to your 'model.onnx' file
         device: 'cuda', 'cpu', etc. (Will auto-detect if None)
+        input_size: fixed (H, W) fed to the model, both multiples of 14 (ViT patch size).
+                    Default 476x644 is the closest to a 480x640 camera while keeping ~4:3.
         """
         script_path = Path(__file__).resolve()
         self.project_root = script_path.parents[2]
 
+        self.input_height, self.input_width = input_size
+        if self.input_height % 14 or self.input_width % 14:
+            raise ValueError(f"input_size {input_size} must be multiples of 14")
 
-        # Determine execution providers based on hardware availability
-        # if device == "mps" or device == "coreml" or (device is None and "CoreMLExecutionProvider" in ort.get_available_providers()):
-        #     providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
-        if device == "cuda" or (device is None and "CUDAExecutionProvider" in ort.get_available_providers()):
+        available = ort.get_available_providers()
+
+        if device in ("mps", "coreml", "gpu") or (device is None and "CoreMLExecutionProvider" in available):
+            # Compiling the CoreML model takes ~50s; cache it so later startups only load it (~10s).
+            # Cache is keyed on the model path, so delete this folder if model.onnx is replaced.
+            onnx_path = self.project_root / onnx_model_path
+            cache_dir = onnx_path.parent / f"coreml_cache_{self.input_height}x{self.input_width}"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            providers = [
+                ("CoreMLExecutionProvider", {
+                    "ModelFormat": "MLProgram",       # newer format, much better op coverage than NeuralNetwork
+                    "MLComputeUnits": "ALL",          # or "CPUAndGPU" to force GPU, "CPUAndNeuralEngine" for ANE
+                    "RequireStaticInputShapes": "1",  # CoreML runs far better with fixed shapes
+                    "ModelCacheDirectory": str(cache_dir),
+                }),
+                "CPUExecutionProvider",
+            ]
+        elif device == "cuda" or (device is None and "CUDAExecutionProvider" in available):
             providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
 
-        print(f"Initializing ONNX Runtime with providers: {providers}")
-        self.session = ort.InferenceSession(self.project_root/onnx_model_path, providers=providers)
+        so = ort.SessionOptions()
+        so.log_severity_level = 3  # errors only; set to 1 to see how many nodes CoreML took
+
+        # The exported model has dynamic dims [batch_size, 3, height, width]; CoreML rejects
+        # most nodes with dynamic shapes, so pin them to make the whole graph static
+        so.add_free_dimension_override_by_name("batch_size", 1)
+        so.add_free_dimension_override_by_name("height", self.input_height)
+        so.add_free_dimension_override_by_name("width", self.input_width)
+
+        model_path = str(self.project_root / onnx_model_path)
+        self.session = ort.InferenceSession(model_path, sess_options=so, providers=providers)
+        print("Active providers:", self.session.get_providers())
+
+
+        # # Determine execution providers based on hardware availability
+        # # if device == "mps" or device == "coreml" or (device is None and "CoreMLExecutionProvider" in ort.get_available_providers()):
+        # #     providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+        # if device == "cuda" or (device is None and "CUDAExecutionProvider" in ort.get_available_providers()):
+        #     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        # else:
+        #     providers = ["CPUExecutionProvider"]
+
+        # print(f"Initializing ONNX Runtime with providers: {providers}")
+        # self.session = ort.InferenceSession(self.project_root/onnx_model_path, providers=providers)
         
         # Get model input names and shapes
         self.input_name = self.session.get_inputs()[0].name
-        self.input_shape = self.session.get_inputs()[0].shape  # Usually [1, 3, H, W]
-        
-        # Extract target height and width from the ONNX model input profile
-        self.input_height = 518
-        self.input_width = 518
+        self.input_shape = self.session.get_inputs()[0].shape  # [1, 3, input_height, input_width] after the overrides
 
         # Image normalization constants (ImageNet defaults used by Depth Anything)
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 1, 3)
@@ -83,9 +121,9 @@ class DepthAnythingONNXPredictor:
         if image is None:
             raise FileNotFoundError(f"Could not load image from {img_path}")
             
-        return self.infer_frame(image)
+        return self.infer(image)
 
-    def infer_frame(self, frame):
+    def infer(self, frame):
         """Process an in-memory BGR frame (shared by image and video pipelines)"""
         orig_h, orig_w = frame.shape[:2]
         
@@ -141,7 +179,7 @@ class DepthAnythingONNXPredictor:
             prev_time = current_time
             
             # Use unified frame inference logic
-            depth = self.infer_frame(frame) 
+            depth = self.infer(frame) 
             color = self.colorize(depth)
             
             # Live preview
@@ -155,7 +193,7 @@ class DepthAnythingONNXPredictor:
 if __name__ == "__main__":
     # Path to your downloaded standard FP32 ONNX model file
     # Replace this with your actual local path to the file
-    onnx_path = "app/models/DAV2_onnx/model.onnx"
+    onnx_path = "ai_models/DAV2_onnx/model.onnx"
 
     # Initialize the predictor with the ONNX file
     depth_model = DepthAnythingONNXPredictor(onnx_model_path=onnx_path, device="mps")

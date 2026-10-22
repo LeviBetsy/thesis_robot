@@ -29,7 +29,7 @@ robot = Robot("fisheye_calib.npz")
 # controller.start() #THREAD 2: start thread to listen for keyboard and sending command to msp432
 
 # ZeroMQ publisher for camera stream process
-streamer = VideoStreamer(fps=3) #THREAD 3: thread to stream video
+streamer = VideoStreamer() #THREAD 3: thread to stream video
 #Main loop
 camera = robot.camera
 cap = cv2.VideoCapture(0)
@@ -50,20 +50,13 @@ particle_streamer = ParticleStreamer(mcl, fps=3) #Thread 6: streams the particle
 
 try:
     while True:
-        loop_start = time.time()
-
+        # Free-running: cap.read() blocks until the next camera frame, so the camera paces this loop
         ret, frame = cap.read()
-        frame = camera.undistort_fisheye(frame=frame)
         if not ret:
             print("Can't capture video frame")
             raise RuntimeError("Cant capture video frame")
+        frame = camera.undistort_fisheye(frame=frame)
         streamer.send_frame(frame)
-        # Making sure sending rate match intended fps
-        processing_time = time.time() - loop_start
-        sleep_time = (1.0 / streamer.fps) - processing_time
-        #TODO: set streamer.fps so they only send over frame once it finishes processing for max latency
-        if sleep_time > 0:
-            time.sleep(sleep_time)
 except KeyboardInterrupt:
     print("stopping")
 except RuntimeError:

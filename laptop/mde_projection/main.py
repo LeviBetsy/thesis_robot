@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 import cv2
 import time
+import threading
 import numpy as np
 
 from app.perception.mde_depth import MDE_Depth
@@ -17,32 +18,36 @@ def real_time_stream(cv_show=False, visualize=False):
     mde_depth = MDE_Depth(config)
 
     display_frame = [None]
+    new_frame = threading.Event() #set by the receiver thread, so MDE only runs once per fresh frame
     def callback_new_video(frame):
         display_frame[0] = frame
+        new_frame.set()
     video_receiver = VideoReceiver(host=config.stream.pi_host, port=config.stream.video_port,
                                    callback=callback_new_video)
     # pcd_streamer = PointStreamer(fps= 3)
-    range_streamer = RangeStreamer(fps=config.stream.range_fps, port=config.stream.range_port)
+    range_streamer = RangeStreamer(port=config.stream.range_port)
     if visualize:
         visualizer = PointCloudVisualizer()
     time.sleep(5)
     try:
         while True:
-            frame = display_frame[0]
-            if frame is not None:
-                pcd = mde_depth.frame_to_pcd(frame)
-                if visualize: visualizer.update(pcd)
-                ray_cast = mde_depth.pcd_to_ray_casting(pcd, n_rays=config.ray_cast.n_rays,
-                                                        max_range=config.ray_cast.max_range)
-                range_streamer.send_range(ray_cast)
+            # Timeout keeps the loop responsive to Ctrl+C when the Pi isn't sending
+            if not new_frame.wait(timeout=1.0):
+                continue
+            new_frame.clear()
+            frame = display_frame[0] #newest frame; any that arrived during the last MDE pass are skipped
 
-                #CV Imshow
-                if cv_show:
-                    cv2.imshow("Video Feed", frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break
+            pcd = mde_depth.frame_to_pcd(frame)
+            if visualize: visualizer.update(pcd)
+            ray_cast = mde_depth.pcd_to_ray_casting(pcd, n_rays=config.ray_cast.n_rays,
+                                                    max_range=config.ray_cast.max_range)
+            range_streamer.send_range(ray_cast)
 
-            time.sleep(0.1)
+            #CV Imshow
+            if cv_show:
+                cv2.imshow("Video Feed", frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
     except KeyboardInterrupt:
         print("Stopping...")
@@ -50,7 +55,7 @@ def real_time_stream(cv_show=False, visualize=False):
         video_receiver.stop()
         range_streamer.stop()
         if visualize: visualizer.close()
-        cv2.destroyAllWindows
+        cv2.destroyAllWindows()
 
 def static_inspection():
     mde_depth = MDE_Depth(config)

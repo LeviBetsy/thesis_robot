@@ -5,6 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 import numpy as np
 
 from app.perception.dav2_pth import DepthAnythingPredictor
+from app.perception.dav2_onnx import DepthAnythingONNXPredictor
 from app.robot_module.robot import Robot
 from app.perception.scale_calibration import FloorScaleCalibration
 from app.perception.point_cloud_proj import PointCloudProjection
@@ -13,7 +14,8 @@ from app.util.config import Config
 class MDE_Depth:
     def __init__(self, config: Config):
         self.robot = Robot(config)
-        self.predictor = DepthAnythingPredictor()
+        # self.predictor = DepthAnythingPredictor()
+        self.predictor = DepthAnythingONNXPredictor(onnx_model_path="ai_models/DAV2_onnx/model.onnx", device="mps")
         self.fsc = FloorScaleCalibration(config.paths.z_real, group_n=config.perception.scale_group_n)
         self.pcd_processor = PointCloudProjection(self.robot)
 

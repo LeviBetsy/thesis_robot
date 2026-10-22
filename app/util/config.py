@@ -33,6 +33,8 @@ class Paths:
 @dataclass
 class RobotConfig:
     """Physical robot. Mirrors Robot.__init__ and the wheel constants under it."""
+    cam_w_for_user_info_never_used: int
+    cam_h_for_user_info_never_used: int
     camera_tilt_deg: float     # camera pitched down from the mounting plate
     cam_t: list                # camera offset in the robot frame, meters (right, forward, up)
     wheel_diameter: float      # meters
@@ -105,8 +107,6 @@ class StreamConfig:
     video_port: int
     particle_port: int
     range_port: int
-    video_fps: int
-    range_fps: int
     particle_fps: int
 
 

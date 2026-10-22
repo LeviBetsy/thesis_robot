@@ -28,6 +28,7 @@ class DepthAnythingPredictor:
             else "mps" if torch.backends.mps.is_available()
             else "cpu"
         )
+        print(f" using gpu: {self.device}")
 
         os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
