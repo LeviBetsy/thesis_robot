@@ -8,15 +8,16 @@ from scripts.mde.DAV2_pth import DepthAnythingPredictor
 from app.robot_module.robot import Robot
 from app.perception.scale_calibration import FloorScaleCalibration
 from app.perception.point_cloud_proj import PointCloudProjection
+from app.util.config import Config
 
 class MDE_Depth:
-    def __init__(self, calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz", ground_Z=0.01):
-        self.robot = Robot(calib_file)
+    def __init__(self, config: Config):
+        self.robot = Robot(config)
         self.predictor = DepthAnythingPredictor()
-        self.fsc = FloorScaleCalibration(ref_file, group_n=16)
+        self.fsc = FloorScaleCalibration(config.paths.z_real, group_n=config.perception.scale_group_n)
         self.pcd_processor = PointCloudProjection(self.robot)
 
-        self.ground_Z = ground_Z #in meters
+        self.ground_Z = config.perception.ground_z #in meters
 
     def process_rel(self,frame):
         return self.predictor.infer(frame)
@@ -45,7 +46,7 @@ class MDE_Depth:
         return pcd[:, :2]
 
 
-    def pcd_to_ray_casting(self, pcd: np.ndarray, n_rays=16, max_range=0.6) -> np.ndarray:
+    def pcd_to_ray_casting(self, pcd: np.ndarray, n_rays, max_range) -> np.ndarray:
         """
         Casts a fan of n_rays evenly spaced across the camera's horizontal FOV
         (each ray covering an angular width of fov_x / n_rays), and returns for
@@ -87,7 +88,7 @@ class MDE_Depth:
         np.minimum.at(ranges, bin_idx[valid], dir_range[valid])
         return ranges
 
-    def frame_to_ray_casting(self, frame, n_rays=16, max_range=0.6, delete_ground=True) -> np.ndarray:
+    def frame_to_ray_casting(self, frame, n_rays, max_range, delete_ground=True) -> np.ndarray:
         """Processes a single frame end-to-end into ray-casted ranges. See pcd_to_ray_casting for details."""
         pcd = self.frame_to_pcd(frame, delete_ground=delete_ground)
         return self.pcd_to_ray_casting(pcd, n_rays=n_rays, max_range=max_range)

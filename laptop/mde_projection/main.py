@@ -7,17 +7,22 @@ import numpy as np
 
 from app.perception.mde_depth import MDE_Depth
 from app.perception.point_cloud_visualizer import PointCloudVisualizer
-from app.stream.zmq_stream import VideoReceiver, PointStreamer, RangeStreamer
+from app.stream.zmq_stream import VideoReceiver, RangeStreamer
+from app.util.config import Config
+
+# Same file the Pi loads, so the ray fan (n_rays, max_range) is binned identically on both sides
+config = Config.load("./config/robot_config.json")
 
 def real_time_stream(cv_show=False, visualize=False):
-    mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
+    mde_depth = MDE_Depth(config)
 
     display_frame = [None]
     def callback_new_video(frame):
         display_frame[0] = frame
-    video_receiver = VideoReceiver(callback=callback_new_video)
+    video_receiver = VideoReceiver(host=config.stream.pi_host, port=config.stream.video_port,
+                                   callback=callback_new_video)
     # pcd_streamer = PointStreamer(fps= 3)
-    range_streamer = RangeStreamer(fps= 3)
+    range_streamer = RangeStreamer(fps=config.stream.range_fps, port=config.stream.range_port)
     if visualize:
         visualizer = PointCloudVisualizer()
     time.sleep(5)
@@ -27,7 +32,8 @@ def real_time_stream(cv_show=False, visualize=False):
             if frame:
                 pcd = mde_depth.frame_to_pcd(frame)
                 if visualize: visualizer.update(pcd)
-                ray_cast = mde_depth.pcd_to_ray_casting(pcd)
+                ray_cast = mde_depth.pcd_to_ray_casting(pcd, n_rays=config.ray_cast.n_rays,
+                                                        max_range=config.ray_cast.max_range)
                 range_streamer.send_range(ray_cast)
 
                 #CV Imshow
@@ -47,7 +53,7 @@ def real_time_stream(cv_show=False, visualize=False):
         cv2.destroyAllWindows
 
 def static_inspection():
-    mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
+    mde_depth = MDE_Depth(config)
     visualizer = PointCloudVisualizer()
     frame = cv2.imread("./data/leg_problem/ref20.jpg")
 
@@ -79,12 +85,13 @@ def static_inspection():
     cv2.destroyAllWindows()
 
 def static_process():
-    mde_depth = MDE_Depth(calib_file="fisheye_calib.npz", ref_file="z_real_16group.npz")
+    mde_depth = MDE_Depth(config)
     frame = cv2.imread("./data/ref21.jpg")
     visualizer = PointCloudVisualizer()
 
     pcd = mde_depth.frame_to_pcd(frame)
-    ray_cast = mde_depth.pcd_to_ray_casting(pcd)
+    ray_cast = mde_depth.pcd_to_ray_casting(pcd, n_rays=config.ray_cast.n_rays,
+                                            max_range=config.ray_cast.max_range)
     print("Ray Casting result:")
     print(ray_cast)
 

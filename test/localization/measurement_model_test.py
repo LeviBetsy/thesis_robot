@@ -46,7 +46,7 @@ MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map_wall.js
 # wall of map1, so the scan has real structure in it (wall dead ahead, open floor off to the
 # sides) rather than 16 identical max ranges. config.mcl.init_pose is not used here because
 # it is a placeholder at the map origin, which is inside the perimeter wall.
-TRUE_POSE = (0.55, 0.7, math.pi / 2)
+TRUE_POSE = (1.0, 0.9, math.pi / 4)
 
 SCAN_NOISE = 0.02   # meters, stands in for monocular depth error on the faked scan
 

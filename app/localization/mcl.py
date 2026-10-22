@@ -9,6 +9,7 @@ from app.localization.map import OccupancyGrid
 from app.localization.particle import Particle, ParticleSet
 from app.localization.ray_caster import RayCaster
 from app.localization.measurement_model import BeamSensorModel
+from app.localization.motion_model import OdometryMotionModel
 from app.robot_module.robot import Robot
 from app.robot_module.odometry import Odometry
 from app.util.config import Config
@@ -26,33 +27,26 @@ from app.util.config import Config
     no change beyond the one constructor argument. See set_odometry for the contract,
     including the thread-safety it demands.
 
-    STATUS: motion and measurement stages are implemented, resample is still a
-    placeholder, so estimate() is not yet meaningful and this deliberately does NOT write
-    back to Robot's pose.
+    STATUS: motion, measurement and resample stages are implemented. This still
+    deliberately does NOT write back to Robot's pose.
 '''
 
 #TODO: VERIFY
 class MCLLocalization:
     def __init__(self, robot: Robot, grid: OccupancyGrid, config: Config, sensor_model=None,
-                 odometry=None):
+                 odometry=None, motion_model=None):
         self.robot = robot
         self.grid = grid
         self.n_particles = int(config.mcl.n_particles)
         self.n_rays = int(config.ray_cast.n_rays)
         self.sensor_model = sensor_model if sensor_model is not None else BeamSensorModel(config=config)
+        self.motion_model = motion_model if motion_model is not None else OdometryMotionModel(config=config)
 
         # Where on_scan gets its motion from, see set_odometry for the contract. A bare
         # Odometry that nothing ever feeds consumes zeros, so "no odometry wired up" is an
         # inert source rather than a special case in on_scan, and the filter stays
         # runnable measurement-only, which is how the existing tests drive it.
         self.odometry = odometry if odometry is not None else Odometry()
-
-        # Odometry motion model noise (Thrun Table 5.6), see motion_update.
-        self.alpha1 = float(config.mcl.motion_alpha1)
-        self.alpha2 = float(config.mcl.motion_alpha2)
-        self.alpha3 = float(config.mcl.motion_alpha3)
-        self.alpha4 = float(config.mcl.motion_alpha4)
-        self.min_trans = float(config.mcl.motion_min_trans)
 
         # Fixed for the life of the filter, so build the ray fan once rather than per scan.
         self.caster = RayCaster(grid, robot.camera, config=config)
@@ -153,21 +147,8 @@ class MCLLocalization:
     def motion_update(self, dx, dy, dtheta):
         """
         Pushes every particle through the odometry increment measured since the last
-        update, with noise drawn independently per particle, so the cloud spreads to
-        reflect encoder drift.
-
-        Thrun's odometry motion model (Probabilistic Robotics, Table 5.6): the step is
-        decomposed into rotate / translate / rotate, each of the three is perturbed, and
-        the perturbed triple is replayed from each particle's own pose.
-
-        FRAME: (dx, dy) are the odometry increment measured RELATIVE to where the robot
-        was at the start of the scan, x along the heading it had then. That is the book's
-        (x_bar' - x_bar, y_bar' - y_bar) with theta_bar already taken out, so
-        delta_rot1 = atan2(dy, dx) needs no further subtraction. Every particle then
-        applies delta_rot1 relative to its OWN theta, which is the point of the
-        decomposition: particles facing different ways must move in different world
-        directions. For a differential drive this increment is
-        dx = d*cos(dtheta/2), dy = d*sin(dtheta/2) with d the mid-point arc length.
+        update. The sampling itself lives in OdometryMotionModel.sample, see there for
+        the frame (dx, dy) must be in and the noise model.
 
         Args:
             dx (float): travel along the starting heading, meters.
@@ -179,47 +160,13 @@ class MCLLocalization:
         if n == 0:
             return
 
-        d_trans = math.hypot(dx, dy)
-        if d_trans < self.min_trans:
-            # Pure rotation: atan2(dy, dx) on a sub-millimeter translation is reading a
-            # bearing off encoder noise, which injects a random rot1/rot2 pair that
-            # cancels in the mean but not in the spread. Attribute the whole turn to rot2.
-            d_rot1 = 0.0
-            d_rot2 = float(dtheta)
-        else:
-            d_rot1 = math.atan2(dy, dx)
-            d_rot2 = float(dtheta) - d_rot1
-
-        # Wrap to [-pi, pi) before the noise scales are computed: a -350 deg rotation is a
-        # +10 deg one, and feeding |-6.1| rad into a1*|d_rot| would claim 35x the noise.
-        d_rot1 = (d_rot1 + math.pi) % (2 * math.pi) - math.pi
-        d_rot2 = (d_rot2 + math.pi) % (2 * math.pi) - math.pi
-
-        # sample(b) is read as zero-mean Gaussian with STANDARD DEVIATION b, not variance
-        # b: the book writes sample(b^2) for the variance form, and the table's argument
-        # a1*d_rot1 + a2*d_trans is dimensionally a std (rad in, rad out). Read as a
-        # variance, a 3 cm step would spread the cloud by sqrt(0.1*0.03) = 5.5 cm, two map
-        # cells per step. abs() on the rotations because a right turn is a negative
-        # d_rot and a negative sigma is not a thing.
-        sigma_rot1 = self.alpha1 * abs(d_rot1) + self.alpha2 * d_trans
-        sigma_trans = self.alpha3 * d_trans + self.alpha4 * (abs(d_rot1) + abs(d_rot2))
-        sigma_rot2 = self.alpha1 * abs(d_rot2) + self.alpha2 * d_trans
-
-        # Sign of the perturbation is irrelevant for a symmetric Gaussian, but the minus
-        # is kept so this reads against the table line for line.
-        rot1 = d_rot1 - np.random.normal(0.0, sigma_rot1, n) #TODO: fact check this sigma_rot1
-        trans = d_trans - np.random.normal(0.0, sigma_trans, n)
-        rot2 = d_rot2 - np.random.normal(0.0, sigma_rot2, n)
-
-        heading = poses[:, 2] + rot1
-        x = poses[:, 0] + trans * np.cos(heading)
-        y = poses[:, 1] + trans * np.sin(heading)
-        theta = heading + rot2 #Particle.__init__ wraps this into [0, 2pi)
+        new_poses = self.motion_model.sample(poses, dx, dy, dtheta) #shape (N, 3)
 
         # Particles are pushed blind: one that walks into a wall keeps its weight until
         # measurement_update masks it, which is where that check belongs. Weights carry
         # over untouched, motion does not change how well a hypothesis explained the scan.
-        particles = [Particle(x[i], y[i], theta[i]) for i in range(n)]
+        # Particle.__init__ wraps theta into [0, 2pi).
+        particles = [Particle(*new_poses[i]) for i in range(n)]
         self.particle_set.replace(particles, w.tolist())
 
     def measurement_update(self, z):
@@ -262,12 +209,39 @@ class MCLLocalization:
 
     def resample(self):
         """
-        PLACEHOLDER. Should draw a new particle set proportional to the weights (low
-        variance / systematic resampling), reset every weight to 1/N, and only fire when
-        the effective sample size drops below a threshold so the cloud is not needlessly
-        collapsed on every scan.
+        Importance resampling: draws a fresh set of exactly n_particles in proportion to
+        the weights measurement_update left, then resets every weight to 1/N. Good
+        hypotheses come back as several copies, poor ones die out; the next motion_update
+        gives each copy its own noise draw, which is what pulls duplicates apart again.
+
+        Low variance / systematic (Thrun Table 4.4): one random offset in [0, 1/N), then
+        N evenly spaced pointers walked through the weight CDF. A particle with weight w
+        gets floor or ceil of N*w copies, where multinomial draws would give it
+        Binomial(N, w), e.g. 5 +- 2.2 copies at N=500, w=0.01.
+
         """
-        pass
+        poses, w = self.particle_set.snapshot()
+        if poses.shape[0] == 0:
+            return
+
+        total = w.sum()
+        w = w / total if total > 0.0 else np.full(w.shape[0], 1.0 / w.shape[0])
+
+        # Output size comes from config, not the current set, so the count is held at
+        # n_particles no matter what the set was handed.
+
+        #TODO: verifiy this code!
+        #TODO: right now no genetic algorithm, resample duplicate good particles which is fine in a way
+        n = self.n_particles
+        pointers = np.random.uniform(0.0, 1.0 / n) + np.arange(n) / n
+        cdf = np.cumsum(w)
+        cdf[-1] = 1.0 #float drift can leave the sum at 0.9999..., past which searchsorted runs off the end
+        idx = np.searchsorted(cdf, pointers, side="right")
+
+        # Fresh Particle objects rather than shared references, so copies of one parent
+        # never alias each other.
+        particles = [Particle(*poses[i]) for i in idx]
+        self.particle_set.replace(particles, [1.0 / n] * n)
 
     # ****** OUTPUT ******
 
@@ -302,6 +276,10 @@ class MCLLocalization:
         actually supports (even inside a wall), while the best particle is always one
         the model scored well.
 
+        on_scan resamples at the end of every scan, which resets every weight to 1/N, so
+        called after on_scan this returns an arbitrary particle. It only means something
+        between measurement_update and resample.
+
         Returns:
             pose (tuple): (x, y, theta), or (0.0, 0.0, 0.0) if the set is empty.
         """
@@ -321,7 +299,7 @@ class MCLLocalization:
 
     # ****** CALLBACK ******
 
-    def on_scan(self, z):
+    def on_scan(self, z, do_resample=True):
         """
         RangeReceiver callback: one full filter step per scan from the laptop.
 
@@ -341,4 +319,5 @@ class MCLLocalization:
         dx, dy, dtheta = self.odometry.consume()
         self.motion_update(dx, dy, dtheta)
         self.measurement_update(z)
-        self.resample() #PLACEHOLDER
+        if do_resample:
+            self.resample()
