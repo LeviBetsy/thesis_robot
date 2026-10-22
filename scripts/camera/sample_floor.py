@@ -125,8 +125,10 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False, out
         configDir = project_root / "config"
         z_real_file = str(configDir / f"z_real_{out_file}.npz")
         cornersOrg_flat = cornersOrg.reshape(-1, 2) #cornersOrg_flatis Nx2
+        x_real = P_cam[:, 0:1] # Using [:, 0:1] slices the 1st column while keeping it 2D
+        y_real = P_cam[:, 1:2] # Using [:, 1:2] slices the 2nd column while keeping it 2D
         z_real = P_cam[:, 2:3] # Using [:, 2:3] slices the 3rd column while keeping it 2D
-        np.savez(z_real_file, cornersOrg=cornersOrg_flat, z_real=z_real)
+        np.savez(z_real_file, cornersOrg=cornersOrg_flat, x_real=x_real, y_real=y_real, z_real=z_real)
         print(f"Successfully saved zreal map to: {z_real_file}")
         #**************************************************  
     else:
@@ -134,4 +136,4 @@ def find_checker_metric(d_ref_img, config_file, square_size, showPics=False, out
 
 
 if __name__ == "__main__":
-  find_checker_metric("ref13", "fisheye_calib.npz", 0.023, False, "fix_checker_size")
+  find_checker_metric("ref13", "fisheye_calib.npz", 0.023, False, "16_rows_xyz")

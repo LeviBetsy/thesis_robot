@@ -34,3 +34,5 @@ Depth-Anything-V2/
 CLAUDE.md
 
 coreml_cache_*
+
+*.npz

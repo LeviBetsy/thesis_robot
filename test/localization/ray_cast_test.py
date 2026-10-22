@@ -35,17 +35,17 @@ Run from anywhere:
 
 config = Config.load("./config/robot_config.json")
 robot = Robot(config)
-MAP_PATH = "./config/map/map_wall.json"
+MAP_PATH = "./config/map/map2.json"
 # poses in meters / radians CCW from +x, each with what it should show
 TEST_POSES = [
-    (Particle(0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
-    (Particle(0.20, 0.20, 0.0),               "facing +x, RIGHT (high index) rays hit the y=0 perimeter"),
-    (Particle(0.20, 0.55, -math.pi / 2),      "facing down at the y=0.37 wall"),
-    (Particle(0.55, 0.45, math.pi / 2),       "facing up at the y=0.73 wall"),
-    (Particle(0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
-    (Particle(0.85, 1.30, math.radians(135)), "diagonal, mixed hits and misses"),
-    (Particle(0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
-    # (Particle(0.55, 0.45, math.pi / 2), "something")
+    # (Particle(0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
+    # (Particle(0.20, 0.20, 0.0),               "facing +x, RIGHT (high index) rays hit the y=0 perimeter"),
+    # (Particle(0.20, 0.55, -math.pi / 2),      "facing down at the y=0.37 wall"),
+    # (Particle(0.55, 0.45, math.pi / 2),       "facing up at the y=0.73 wall"),
+    # (Particle(0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
+    # (Particle(0.85, 1.30, math.radians(135)), "diagonal, mixed hits and misses"),
+    # (Particle(0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
+    (Particle(0.60, 0.40, math.pi/2), "something")
 ]
 
 # BGR, one per pose

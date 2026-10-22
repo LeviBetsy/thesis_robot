@@ -36,11 +36,11 @@ Run on the Pi:
 '''
 
 CONFIG_PATH = "./config/robot_config.json"
-MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map2.json")
+MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map1.json")
 
 # Where the robot is physically placed for the test: meters / degrees CCW from +x.
 # Arbitrary for now; measure the real placement and pass it with --pose.
-TEST_POSE = (0.55, 0.33, 90.0)
+TEST_POSE = (0.60, 0.40, 90.0)
 
 
 def print_comparison(z_pred, z_mde, no_return):
