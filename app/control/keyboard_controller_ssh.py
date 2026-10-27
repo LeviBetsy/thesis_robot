@@ -11,16 +11,17 @@
 # - Protocol: TCP (SOCK_STREAM) bound to 127.0.0.1.
 # - Concurrency: The 'connect' loop runs in a daemonized background thread to 
 #   prevent blocking the main execution loop.
-# - Data Format: Expects UTF-8 encoded strings in the format "int,int,int\n". 
-# - Command Handling: Supports handling multiple commands in a single packet 
+# - Data Format: Expects UTF-8 encoded strings in the format "left_cps,right_cps\n",
+#   signed encoder counts per second (negative = reverse).
+# - Command Handling: Supports handling multiple commands in a single packet
 #   by splitting on newline characters.
 
 # Usage:
-# 1. Define a callback function that accepts three integers: 
-#    def my_callback(val1, val2, val3): ... (presumably this call back function is the function to send DIR,LDUTY,RDUTY over UART)
+# 1. Define a callback function that accepts two signed integers:
+#    def my_callback(left_cps, right_cps): ... (presumably this call back function sends the speeds over UART)
 # 2. Instantiate RobotController(command_callback=my_callback, port=8080).
 # 3. Call .start() to begin listening for incoming connections.
-# 4. On connection loss, the controller automatically triggers a safety stop (0,0,0).
+# 4. On connection loss, the controller automatically triggers a safety stop (0,0).
 # """
 
 
@@ -59,11 +60,11 @@ class RobotController:
                         for cmd_str in msg.strip().split('\n'):
                             if cmd_str:
                                 parts = [int(x) for x in cmd_str.split(',')]
-                                if len(parts) == 3:
-                                    self.command_callback(parts[0], parts[1], parts[2])
+                                if len(parts) == 2:
+                                    self.command_callback(parts[0], parts[1])
             except Exception as e:
                 print(f"Connection lost or error: {e}")
-                self.command_callback(0, 0, 0) # Safety stop
+                self.command_callback(0, 0) # Safety stop
 
     def stop(self):
         self.running = False

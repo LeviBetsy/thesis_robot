@@ -19,7 +19,7 @@ class MSP432Uart:
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self.data_queue = queue.Queue()
+        self.data_queue = queue.Queue(maxsize=1) # Counts are cumulative, so only the newest packet is kept
         self._is_logging = False
         self.ser = serial.Serial(
                 port=self.port,
@@ -41,32 +41,6 @@ class MSP432Uart:
             print(f"Error opening serial port: {e}")
             raise # Re-raise the exception to handle it in the calling code
     
-    #block the main thread until the data is returned, ie there is tachometer data from the msp432
-    def get_data(self):
-        lcount, rcount = self.data_queue.get() #queue.get blocks the whole thread until data is returned
-        return lcount, rcount
-
-    def log_tach(self, filename="data/odometry_log.txt"):
-        self._is_logging = True
-        
-        with open(filename, "a") as log_file:
-            print(f"Listening for UART data. Writing to {filename}. Press Ctrl+C to stop.")
-            
-            # Using the flag instead of 'while True' allows for safe thread shutdown
-            while self._is_logging:
-                try:
-                    # Called via self instead of the instance name
-                    l_count, r_count = self.get_data() 
-                    
-                    log_entry = f"LCount: {l_count}, RCount: {r_count}\n"
-                    log_file.write(log_entry)
-                    log_file.flush()
-                
-                
-                except Exception as e:
-                    print(f"Error reading UART data: {e}")
-                    break
-
     def stop_logging(self):
         """Call this method to break the loop and safely close the thread."""
         self._is_logging = False
@@ -82,15 +56,18 @@ class MSP432Uart:
         else:
             print("Serial port is not open. Cannot send data.")
 
-    def send_command(self, inst_t, leftduty, rightduty):
+    def send_command(self, left_cps, right_cps):
+        """Send signed wheel speeds (encoder counts/sec) as big-endian int16s."""
         if self.ser and self.ser.is_open:
             try:
                 header = 0xAA
-                l_high, l_low = (leftduty >> 8) & 0xFF, leftduty & 0xFF
-                r_high, r_low = (rightduty >> 8) & 0xFF, rightduty & 0xFF
-                inst = inst_t & 0xFF
-                checksum = inst ^ l_high ^ l_low ^ r_high ^ r_low
-                packet = bytearray([header, inst, l_high, l_low, r_high, r_low, checksum])
+                # Clamp to int16 so out-of-range values can't wrap and flip direction
+                left = max(-32768, min(32767, int(left_cps))) & 0xFFFF
+                right = max(-32768, min(32767, int(right_cps))) & 0xFFFF
+                l_high, l_low = (left >> 8) & 0xFF, left & 0xFF
+                r_high, r_low = (right >> 8) & 0xFF, right & 0xFF
+                checksum = l_high ^ l_low ^ r_high ^ r_low
+                packet = bytearray([header, l_high, l_low, r_high, r_low, checksum])
                 self.ser.write(packet)
             except Exception as e:
                 print(f"Failed to send data: {e}")
@@ -99,7 +76,7 @@ class MSP432Uart:
         
 
     def poll_receive(self):
-        """Continuously polls the serial port for the 4-byte packet."""
+        """Continuously polls the serial port for the 6-byte packet."""
         if not (self.ser and self.ser.is_open):
             print("Serial port is not open. Cannot receive data.")
             return
@@ -137,7 +114,12 @@ class MSP432Uart:
                             #     else:
                             #         print("Incomplete packet received. Waiting for next start byte.")
                             if received_checksum == expected_checksum:
-                                self.data_queue.put((data1_signed, data2_signed))
+                                # Drop the stale packet (if any) so the queue never grows
+                                try:
+                                    self.data_queue.get_nowait()
+                                except queue.Empty:
+                                    pass
+                                self.data_queue.put_nowait((data1_signed, data2_signed))
                             else:
                                 print("Incomplete packet received. Waiting for next start byte.")
             

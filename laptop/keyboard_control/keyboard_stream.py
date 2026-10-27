@@ -26,17 +26,21 @@ def connect_to_pi():
         print(f"Failed to connect: {e}")
         return False
 
-pressed_keys = set()
-current_cmd = (0, 0, 0)
+# Target wheel speeds in encoder counts per second (signed: negative = reverse)
+FULL_CPS = 360
+HALF_CPS = 180
 
-def send_to_pi(inst, left, right):
+pressed_keys = set()
+current_cmd = (0, 0)
+
+def send_to_pi(left_cps, right_cps):
     global current_cmd
-    if (inst, left, right) != current_cmd:
+    if (left_cps, right_cps) != current_cmd:
         # We add a newline \n so the Pi knows where one command ends and the next begins
-        msg = f"{inst},{left},{right}\n"
+        msg = f"{left_cps},{right_cps}\n"
         try:
             sock.sendall(msg.encode('utf-8'))
-            current_cmd = (inst, left, right)
+            current_cmd = (left_cps, right_cps)
             # print(f"Sent: {msg.strip()}")
         except Exception as e:
             print(f"Send failed: {e}")
@@ -48,16 +52,16 @@ def update_logic():
     right = keyboard.Key.right in pressed_keys
 
     if up:
-        if left: send_to_pi(1, 2500, 5000)
-        elif right: send_to_pi(1, 5000, 2500)
-        else: send_to_pi(1, 5000, 5000)
+        if left: send_to_pi(HALF_CPS, FULL_CPS)
+        elif right: send_to_pi(FULL_CPS, HALF_CPS)
+        else: send_to_pi(FULL_CPS, FULL_CPS)
     elif down:
-        if left: send_to_pi(2, 2500, 5000)
-        elif right: send_to_pi(2, 5000, 2500)
-        else: send_to_pi(2, 5000, 5000)
-    elif left: send_to_pi(3, 2500, 2500)
-    elif right: send_to_pi(4, 2500, 2500)
-    else: send_to_pi(0, 0, 0)
+        if left: send_to_pi(-HALF_CPS, -FULL_CPS)
+        elif right: send_to_pi(-FULL_CPS, -HALF_CPS)
+        else: send_to_pi(-FULL_CPS, -FULL_CPS)
+    elif left: send_to_pi(-HALF_CPS, HALF_CPS)
+    elif right: send_to_pi(HALF_CPS, -HALF_CPS)
+    else: send_to_pi(0, 0)
 
 def on_press(key):
     if key in [keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right]:

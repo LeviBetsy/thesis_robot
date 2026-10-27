@@ -14,8 +14,8 @@ from app.util.config import Config
 class MDE_Depth:
     def __init__(self, config: Config):
         self.robot = Robot(config)
-        # self.predictor = DepthAnythingPredictor()
-        self.predictor = DepthAnythingONNXPredictor(onnx_model_path="ai_models/DAV2_onnx/model.onnx", device="mps")
+        self.predictor = DepthAnythingPredictor()
+        # self.predictor = DepthAnythingONNXPredictor(onnx_model_path="ai_models/DAV2_onnx/model.onnx", device="mps")
         self.fsc = FloorScaleCalibration(config.paths.z_real, group_n=config.perception.scale_group_n)
         self.pcd_processor = PointCloudProjection(self.robot)
 

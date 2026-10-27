@@ -63,7 +63,7 @@ pass a smaller --refresh-ms if that bothers you.
 '''
 
 CONFIG_PATH = "./config/robot_config.json"
-MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map2.json")
+MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map1.json")
 
 # The test scenario, not tunables: meters / radians CCW from +x. Same starting pose as
 # measurement_model_test.py, facing the y=0.73 wall of map_wall. config.mcl.init_pose is not
@@ -390,9 +390,9 @@ if __name__ == "__main__":
     # The rover's own Odometry is the filter's motion source, so on_scan consumes exactly
     # what mark() accumulated, and the body frame resets at every press.
     mcl = MCLLocalization(robot, grid, config, odometry=rover.odometry)
-    mcl.init_particles_gaussian(*START_POSE, sigma_x=sigma_x, sigma_y=sigma_y,
-                                sigma_theta=sigma_theta,
-                                max_attempts=config.mcl.init_max_attempts)
+    # mcl.init_particles_gaussian(*START_POSE, sigma_x=sigma_x, sigma_y=sigma_y,
+    #                             sigma_theta=sigma_theta,
+    #                             max_attempts=config.mcl.init_max_attempts)
 
     vconfig = config.visualizer
     vis = VirtualRobotVisualizer(grid, host=vconfig.host, port=vconfig.port,
