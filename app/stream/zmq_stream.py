@@ -116,12 +116,11 @@ class ParticleStreamer:
         while self.running:
             loop_start = time.time()
 
-            # mcl.particles is reassigned wholesale by init_particles_*/resample rather than
-            # mutated in place, so lock just long enough to snapshot the list reference.
-            with self.mcl.mutex_lock:
-                particles = self.mcl.particles
-            positions = np.array([[p.x, p.y, p.theta] for p in particles], dtype=np.float32)
-            self.send_point(positions)
+            # ParticleSet snapshots under its own lock, so a concurrent resample() on the
+            # range receiver thread can't hand us a half-swapped set.
+            positions = self.mcl.particle_set.poses()
+            if positions.shape[0] > 0:
+                self.send_point(positions)
 
             processing_time = time.time() - loop_start
             sleep_time = (1.0 / self.fps) - processing_time

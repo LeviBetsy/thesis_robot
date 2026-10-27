@@ -25,8 +25,9 @@ msp432_uart.start_receiving() #THREAD 1: listen to encoder counts from MSP432 an
 controller = RobotController(msp432_uart.send_command)
 controller.start() #THREAD 2: listen for left_cps,right_cps from the laptop and forward to msp432
 
-def int16_delta(curr, prev):
-    # Cumulative counts are int16 and wrap at +/-32768, so fold the difference back into range
+def count_delta(curr, prev):
+    # Cumulative counts are int32 from the MSP432. Folding the difference into +/-32768 is exact
+    # for any real per-sample delta, and also absorbs the counter's int32 wrap (2^32 is a multiple of 65536)
     return ((curr - prev + 32768) % 65536) - 32768
 
 if __name__ == "__main__":
@@ -54,8 +55,8 @@ if __name__ == "__main__":
             now = time.monotonic()
             if prev_counts is not None:
                 dt = now - prev_time
-                l_cps = int16_delta(latest[0], prev_counts[0]) / dt
-                r_cps = int16_delta(latest[1], prev_counts[1]) / dt
+                l_cps = count_delta(latest[0], prev_counts[0]) / dt
+                r_cps = count_delta(latest[1], prev_counts[1]) / dt
                 max_l_cps = max(max_l_cps, abs(l_cps))
                 max_r_cps = max(max_r_cps, abs(r_cps))
                 print(f"LCount: {latest[0]:6d}  RCount: {latest[1]:6d}  "

@@ -8,13 +8,14 @@ from app.util.config import Config
 
 def visualize_map():
     config = Config.load()
-    map = OccupancyGrid.from_json("config/map/map0.json", config, default_value=0)
+    map = OccupancyGrid.from_json("config/map/real_map0.json", config, default_value=0)
 
     map_visualizer = MapVisualizer(map)
     def call_back(p):
         print(p)
     # particle_receiver = ParticleReceiver(callback=call_back)
-    particle_receiver = ParticleReceiver(callback=map_visualizer.update_particles)
+    particle_receiver = ParticleReceiver(host=config.stream.pi_host, port=config.stream.particle_port,
+                                         callback=map_visualizer.update_particles)
 
     try:
         map_visualizer.serve_forever()

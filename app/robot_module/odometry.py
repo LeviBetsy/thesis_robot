@@ -1,5 +1,6 @@
 import threading
 import math
+import queue
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -113,10 +114,19 @@ class WheelOdometry(Odometry):
     def init_odometry_thread(self, msp432_uart: MSP432Uart):
         """Starts the thread that drains the UART queue into the accumulator."""
         def odom_loop():
+            # The MSP432 sends CUMULATIVE int32 counts, so differencing consecutive packets
+            # gives the per-packet slots update_odom_coordinate wants. data_queue only keeps
+            # the newest packet, but a dropped one just folds into the next delta.
+            prev = None
             while self._running:
-                #blocks until the MSP432 sends a packet
-                Lcount, Rcount = msp432_uart.get_data()
-                self.update_odom_coordinate(Lcount, Rcount)
+                try:
+                    #timeout so stop() is noticed even if the MSP432 goes quiet
+                    Lcount, Rcount = msp432_uart.data_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+                if prev is not None:
+                    self.update_odom_coordinate(Lcount - prev[0], Rcount - prev[1])
+                prev = (Lcount, Rcount)
 
         self._running = True
         self.odometry_thread = threading.Thread(target=odom_loop, daemon=True)
