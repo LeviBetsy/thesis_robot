@@ -76,53 +76,47 @@ class MSP432Uart:
         
 
     def poll_receive(self):
-        """Continuously polls the serial port for the 6-byte packet."""
+        """Continuously polls the serial port for the 10-byte packet."""
         if not (self.ser and self.ser.is_open):
             print("Serial port is not open. Cannot receive data.")
             return
 
         print("Listening for incoming data...")
-        
+
         while self.ser.is_open:
             try:
-                # Block until at least one byte is in the buffer
-                if self.ser.in_waiting > 0:
-                    # Read one byte at a time looking for the start byte
-                    start_byte = self.ser.read(1)
-                    
-                    if start_byte == b'\xAA':
-                        # Read the remaining 5 bytes: LC_MSB, LC_LSB, RC_MSB, RC_LSB, checksum
-                        payload = self.ser.read(5)
-                        
-                        if len(payload) == 5:
-                            # '>' means Big-Endian (High Byte first)
-                            # 'h' means signed 16-bit integer (takes 2 bytes each)
-                            # 'B' means unsigned 8-bit integer (checksum)
-                            data1_signed, data2_signed, received_checksum = struct.unpack('>hhB', payload)
-                            
-                            # Reconstruct the raw bytes to calculate the expected checksum
-                            lc_high = (data1_signed >> 8) & 0xFF
-                            lc_low  = data1_signed & 0xFF
-                            rc_high = (data2_signed >> 8) & 0xFF
-                            rc_low  = data2_signed & 0xFF
-                            
-                            expected_checksum = lc_high ^ lc_low ^ rc_high ^ rc_low
-                            
-                            # with open("uart_log.txt", "a") as log_file:
-                            #     if received_checksum == expected_checksum:
-                            #         log_file.write(f"Valid Packet -> LCount: {data1_signed}, RCount: {data2_signed}\n")
-                            #     else:
-                            #         print("Incomplete packet received. Waiting for next start byte.")
-                            if received_checksum == expected_checksum:
-                                # Drop the stale packet (if any) so the queue never grows
-                                try:
-                                    self.data_queue.get_nowait()
-                                except queue.Empty:
-                                    pass
-                                self.data_queue.put_nowait((data1_signed, data2_signed))
-                            else:
-                                print("Incomplete packet received. Waiting for next start byte.")
-            
+                # Read one byte at a time looking for the start byte; this blocks
+                # for up to self.timeout and returns b'' if nothing arrives
+                start_byte = self.ser.read(1)
+
+                if start_byte == b'\xAA':
+                    # Read the remaining 9 bytes: LCount[31:0], RCount[31:0], checksum
+                    payload = self.ser.read(9)
+
+                    if len(payload) < 9:
+                        print(f"Short read: got {len(payload)}/9 payload bytes. Waiting for next start byte.")
+                        continue
+
+                    # '>' means Big-Endian (High Byte first)
+                    # 'i' means signed 32-bit integer (takes 4 bytes each)
+                    # 'B' means unsigned 8-bit integer (checksum)
+                    l_count, r_count, received_checksum = struct.unpack('>iiB', payload)
+
+                    # The MSP432 XORs the 8 data bytes, so XOR them back the same way
+                    expected_checksum = 0
+                    for data_byte in payload[:8]:
+                        expected_checksum ^= data_byte
+
+                    if received_checksum == expected_checksum:
+                        # Drop the stale packet (if any) so the queue never grows
+                        try:
+                            self.data_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                        self.data_queue.put_nowait((l_count, r_count))
+                    else:
+                        print(f"Checksum mismatch (got 0x{received_checksum:02X}, expected 0x{expected_checksum:02X}). Resyncing.")
+
             except serial.SerialException:
                 # Exit cleanly if the port is closed while reading
                 break
@@ -134,42 +128,3 @@ class MSP432Uart:
         if self.ser and self.ser.is_open:
             self.ser.close()
             print(f"Serial port {self.port} closed.")
-
-
-# --- Execution ---
-if __name__ == "__main__":
-    msp432_uart = MSP432Uart(port='/dev/ttyAMA0', baudrate=115200)
-    msp432_uart.connect()
-
-    try:
-    # 1. O  pen the log file once before entering the fast loop
-        with open("odometry_log.txt", "a") as log_file:
-            print("Listening for UART data. Press Ctrl+C to stop.")
-            
-            while True:
-                # if the queue is empty, resulting in zero wasted CPU cycles.
-                l_count, r_count = msp432_uart.get_data() # NOTE! This method is blocking, ie the whole thread is being paused 
-                
-                # 2. Format the string
-                log_entry = f"LCount: {l_count}, RCount: {r_count}\n"
-                
-                # 3. Write to the file
-                log_file.write(log_entry)
-                
-                # 4. Flush the buffer: This forces the Pi to write to the SD card immediately.
-                # Without this, if your robot loses power or crashes unexpectedly, 
-                # you might lose the last few seconds of data sitting in the RAM buffer.
-                log_file.flush()
-                
-                # Optional: Print to console so you can monitor it live
-                print(f"Logged: {log_entry.strip()}")
-
-    except KeyboardInterrupt:
-        # Catches the Ctrl+C command from the terminal
-        print("\nKeyboard interrupt detected. Exiting loop...")
-
-    finally:
-        # The 'finally' block guarantees this code runs no matter how the try block ends
-        # (whether by KeyboardInterrupt, a random crash, or a normal exit).
-        print("Closing UART connection...")
-        msp432_uart.close()
