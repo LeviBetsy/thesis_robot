@@ -25,8 +25,16 @@ msp432_uart.start_receiving() #THREAD 1: listen to encoder counts from MSP432 an
 controller = RobotController(msp432_uart.send_command)
 controller.start() #THREAD 2: listen for left_cps,right_cps from the laptop and forward to msp432
 
+def int16_delta(curr, prev):
+    # Cumulative counts are int16 and wrap at +/-32768, so fold the difference back into range
+    return ((curr - prev + 32768) % 65536) - 32768
+
 if __name__ == "__main__":
     print("PID test running. Drive with keyboard_stream.py on the laptop. Ctrl+C to stop.")
+    prev_counts = None
+    prev_time = None
+    max_l_cps = 0.0
+    max_r_cps = 0.0
     try:
         while True:
             time.sleep(1.0)
@@ -41,8 +49,20 @@ if __name__ == "__main__":
 
             if latest is None:
                 print("No encoder data received in the last second")
-            else:
-                print(f"LCount: {latest[0]:6d}  RCount: {latest[1]:6d}")
+                continue
+
+            now = time.monotonic()
+            if prev_counts is not None:
+                dt = now - prev_time
+                l_cps = int16_delta(latest[0], prev_counts[0]) / dt
+                r_cps = int16_delta(latest[1], prev_counts[1]) / dt
+                max_l_cps = max(max_l_cps, abs(l_cps))
+                max_r_cps = max(max_r_cps, abs(r_cps))
+                print(f"LCount: {latest[0]:6d}  RCount: {latest[1]:6d}  "
+                      f"L_CPS: {l_cps:7.1f}  R_CPS: {r_cps:7.1f}  "
+                      f"(max L: {max_l_cps:.1f}  R: {max_r_cps:.1f})")
+            prev_counts = latest
+            prev_time = now
 
     except KeyboardInterrupt:
         print("\nShutting down...")
