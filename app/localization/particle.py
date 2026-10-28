@@ -4,93 +4,80 @@ import threading
 import numpy as np
 
 
-'''
-    One weighted pose hypothesis. The filter keeps a list of these; the vectorised path in
-    MCLLocalization packs them into an (N,3) array and casts them with RayCaster.predict.
-'''
-class Particle:
-    def __init__(self, x, y, theta, weight=1.0):
-        self.x = float(x) #in meter
-        self.y = float(y)
-        self.theta = float(theta) % (2 * math.pi) #match Robot.set_robot_pose's wrapping
-        self.weight = float(weight)
-
-    def pose(self) -> tuple:
-        """Returns this particle's (x, y, theta)."""
-        return self.x, self.y, self.theta
-
-
-    def __repr__(self):
-        return f"Particle(x={self.x:.3f}, y={self.y:.3f}, theta={math.degrees(self.theta):.1f}deg, w={self.weight:.4g})"
-
-
 class ParticleSet:
     """
-    A list of Particles paired with a same-length list of weights, guarded by a lock.
+    N weighted pose hypotheses: an (N, 3) array of (x, y, theta) and an (N,) array of
+    weights, guarded by a lock.
+
+    Stored as arrays rather than a list of Particles because every filter stage (motion
+    model, ray caster, resampler) works on the (N, 3) array anyway, so this skips a
+    per-particle Python loop in and out of every stage.
 
     Owns the lock (rather than the filter that uses it) because the set is what's
     actually shared between the measurement/resample thread and any thread reading
-    poses() / get_weights() (e.g. estimate()) concurrently.
+    poses() / get_weights() concurrently. Every read returns a copy, so a caller never
+    holds a view the next replace() could change under it.
     """
 
-    def __init__(self, particles=None, weights=None):
-        self.particles = list(particles) if particles is not None else []
-        self.weights = list(weights) if weights is not None else []
-        if len(self.particles) != len(self.weights):
-            raise ValueError("particles and weights must be the same length")
+    def __init__(self, poses=None, weights=None):
+        if poses is None and weights is None:
+            poses, weights = np.empty((0, 3)), np.empty(0)
+        self.particle_poses, self.weights = self._as_arrays(poses, weights)
         self.lock = threading.Lock()
+
+    @staticmethod
+    def _as_arrays(poses, weights):
+        """Copies into float64 arrays, checks the lengths match, wraps theta."""
+        poses = np.array(poses, dtype=np.float64).reshape(-1, 3)
+        weights = np.array(weights, dtype=np.float64).reshape(-1)
+        if poses.shape[0] != weights.shape[0]:
+            raise ValueError("poses and weights must be the same length")
+        poses[:, 2] %= 2 * math.pi #match Robot.set_robot_pose's wrapping
+        return poses, weights
 
     def __len__(self):
         with self.lock:
-            return len(self.particles)
+            return self.particle_poses.shape[0]
 
-    def add(self, particle, weight=1.0):
-        with self.lock:
-            self.particles.append(particle)
-            self.weights.append(weight)
+    def replace(self, poses, weights):
+        """Atomically swaps in an entirely new pose/weight set (init, motion, resample).
 
-    def remove(self, i):
+        Args:
+            poses (np.ndarray): shape (N, 3), theta is wrapped into [0, 2*pi) here.
+            weights (np.ndarray): shape (N,).
+        """
+        poses, weights = self._as_arrays(poses, weights)
         with self.lock:
-            del self.particles[i]
-            del self.weights[i]
-
-    def replace(self, particles, weights):
-        """Atomically swaps in an entirely new particle/weight set (init, resample)."""
-        particles, weights = list(particles), list(weights)
-        if len(particles) != len(weights):
-            raise ValueError("particles and weights must be the same length")
-        with self.lock:
-            self.particles = particles
+            self.particle_poses = poses
             self.weights = weights
 
     def poses(self) -> np.ndarray:
         """Snapshot of (x, y, theta) for every particle, shape (N, 3)."""
         with self.lock:
-            return np.array([[p.x, p.y, p.theta] for p in self.particles])
+            return self.particle_poses.copy()
 
     def get_weights(self) -> np.ndarray:
         with self.lock:
-            return np.array(self.weights)
+            return self.weights.copy()
 
     def set_weights(self, weights):
+        weights = np.array(weights, dtype=np.float64).reshape(-1)
         with self.lock:
-            if len(weights) != len(self.particles):
+            if weights.shape[0] != self.particle_poses.shape[0]:
                 raise ValueError("weights must match particle count")
-            self.weights = list(weights)
+            self.weights = weights
 
     def snapshot(self):
         """Poses and weights read together under one lock, so a concurrent replace()
         can't be interleaved between two separate reads and leave them mismatched."""
         with self.lock:
-            poses = np.array([[p.x, p.y, p.theta] for p in self.particles])
-            weights = np.array(self.weights)
-            return poses, weights
+            return self.particle_poses.copy(), self.weights.copy()
 
     def best(self):
-        """Returns the (particle, weight) pair with the highest weight, or (None, 0.0)
-        if empty."""
+        """Returns ((x, y, theta), weight) for the highest-weight particle, or
+        (None, 0.0) if empty."""
         with self.lock:
-            if not self.particles:
+            if self.particle_poses.shape[0] == 0:
                 return None, 0.0
             i = int(np.argmax(self.weights))
-            return self.particles[i], self.weights[i]
+            return tuple(float(v) for v in self.particle_poses[i]), float(self.weights[i])

@@ -49,7 +49,7 @@ class OdometryMotionModel:
             dtheta (float): heading change over the step, radians.
         Returns:
             new_poses (np.ndarray): shape (N, 3), float64. theta is NOT wrapped,
-                                    Particle.__init__ wraps it into [0, 2pi).
+                                    ParticleSet.replace wraps it into [0, 2pi).
         """
         poses = np.asarray(poses, dtype=np.float64)
         n = poses.shape[0]

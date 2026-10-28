@@ -120,6 +120,8 @@ class StreamConfig:
     particle_port: int
     range_port: int
     particle_fps: int
+    scan_timeout: float        # seconds the Pi waits for a frame's range fan before giving
+                               # up on it and sending a fresh one (lockstep, see manual_drive)
 
 
 @dataclass

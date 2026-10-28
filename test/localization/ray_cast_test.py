@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 
 from app.localization.map import OccupancyGrid
-from app.localization.particle import Particle
 from app.localization.ray_caster import RayCaster
 from app.localization.visualize_map import MapVisualizer
 from app.util.config import Config
@@ -38,14 +37,14 @@ robot = Robot(config)
 MAP_PATH = "./config/map/map2.json"
 # poses in meters / radians CCW from +x, each with what it should show
 TEST_POSES = [
-    # (Particle(0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
-    # (Particle(0.20, 0.20, 0.0),               "facing +x, RIGHT (high index) rays hit the y=0 perimeter"),
-    # (Particle(0.20, 0.55, -math.pi / 2),      "facing down at the y=0.37 wall"),
-    # (Particle(0.55, 0.45, math.pi / 2),       "facing up at the y=0.73 wall"),
-    # (Particle(0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
-    # (Particle(0.85, 1.30, math.radians(135)), "diagonal, mixed hits and misses"),
-    # (Particle(0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
-    (Particle(0.60, 0.40, math.pi/2), "something")
+    # ((0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
+    # ((0.20, 0.20, 0.0),               "facing +x, RIGHT (high index) rays hit the y=0 perimeter"),
+    # ((0.20, 0.55, -math.pi / 2),      "facing down at the y=0.37 wall"),
+    # ((0.55, 0.45, math.pi / 2),       "facing up at the y=0.73 wall"),
+    # ((0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
+    # ((0.85, 1.30, math.radians(135)), "diagonal, mixed hits and misses"),
+    # ((0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
+    ((0.60, 0.40, math.pi/2), "something")
 ]
 
 # BGR, one per pose
@@ -101,7 +100,7 @@ if __name__ == "__main__":
 
     grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0)
     caster = RayCaster(grid, robot.camera, config)
-    poses = np.array([p.pose() for p, _ in TEST_POSES]) #shape (N, 3)
+    poses = np.array([p for p, _ in TEST_POSES]) #shape (N, 3)
 
     z = caster.predict(poses)                #shape (N, n_rays), meters from the camera
     origins, headings = caster.rays(poses)   #shape (N, n_rays, 2) and (N, n_rays)

@@ -13,7 +13,6 @@ import cv2
 import numpy as np
 
 from app.localization.map import OccupancyGrid
-from app.localization.particle import Particle
 from app.localization.ray_caster import RayCaster
 from app.localization.visualize_map import MapVisualizer
 from app.robot_module.robot import Robot
@@ -86,14 +85,13 @@ if __name__ == "__main__":
     #Map and the particle's predicted scan, fixed for the whole run since the robot doesn't move
     grid = OccupancyGrid.from_json(args.map, config, default_value=0)
     caster = RayCaster(grid, camera, config)
-    particle = Particle(args.pose[0], args.pose[1], math.radians(args.pose[2]))
-    pose = np.array([particle.pose()]) #shape (1, 3)
+    pose = np.array([[args.pose[0], args.pose[1], math.radians(args.pose[2])]]) #shape (1, 3)
 
     z_pred = caster.predict(pose)[0]        #shape (n_rays,), meters from the camera
     origins, headings = caster.rays(pose)   #shape (1, n_rays, 2) and (1, n_rays)
     origins, headings = origins[0], headings[0]
 
-    print(f"particle {particle}")
+    print(f"particle x={pose[0, 0]:.3f} y={pose[0, 1]:.3f} theta={args.pose[2]:.1f}deg")
     print("predicted:", np.round(z_pred, 3))
 
     #Every MDE scan the laptop sends back, kept so the run can be summarised at the end

@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 from app.localization.map import OccupancyGrid
-from app.localization.particle import Particle, ParticleSet
+from app.localization.particle import ParticleSet
 from app.localization.ray_caster import RayCaster
 from app.localization.measurement_model import BeamSensorModel
 from app.localization.motion_model import OdometryMotionModel
@@ -81,30 +81,6 @@ class MCLLocalization:
 
     # ****** INITIALISATION ******
 
-    # have never verified
-    def init_particles_uniform(self):
-        """Scatters particles over the map's free cells with uniform heading (global
-        localization).
-
-        Clears the odometry accumulator on the way out: motion from before the cloud
-        existed means nothing to it, and would otherwise be applied on the first scan."""
-        rows, cols = np.nonzero(self.grid.data <= 0.5)
-        if rows.shape[0] == 0:
-            raise RuntimeError("Map has no free cells to place particles in")
-
-        pick = np.random.randint(0, rows.shape[0], size=self.n_particles)
-        half = self.grid.cell_size / 2.0
-
-        #cell centre plus jitter within the cell, so particles are not stuck on a lattice
-        x = (cols[pick] * self.grid.cell_size) - half + np.random.uniform(-half, half, self.n_particles)
-        y = (rows[pick] * self.grid.cell_size) - half + np.random.uniform(-half, half, self.n_particles)
-        theta = np.random.uniform(0.0, 2 * math.pi, self.n_particles)
-
-        w = 1.0 / self.n_particles
-        particles = [Particle(x[i], y[i], theta[i]) for i in range(self.n_particles)]
-        self.particle_set.replace(particles, [w] * self.n_particles)
-        self.odometry.clear()
-
     # verified not tested
     def init_particles_gaussian(self, x, y, theta, sigma_x=0.05, sigma_y=0.05, sigma_theta=0.1, max_attempts=50):
         """
@@ -112,8 +88,8 @@ class MCLLocalization:
         localization). Rejection-sampled against the map: any draw landing outside the
         grid or inside a wall is redrawn, so every particle starts on a valid hypothesis.
 
-        Clears the odometry accumulator on the way out, same reason as
-        init_particles_uniform: pre-seed motion does not belong to this cloud.
+        Clears the odometry accumulator on the way out: motion from before the cloud
+        existed means nothing to it, and would otherwise be applied on the first scan.
         """
         px = np.empty(self.n_particles)
         py = np.empty(self.n_particles)
@@ -137,9 +113,8 @@ class MCLLocalization:
             px[accepted], py[accepted], pt[accepted] = sample_x[valid], sample_y[valid], sample_theta[valid]
             remaining = remaining[~valid]
 
-        w = 1.0 / self.n_particles
-        particles = [Particle(px[i], py[i], pt[i]) for i in range(self.n_particles)]
-        self.particle_set.replace(particles, [w] * self.n_particles)
+        self.particle_set.replace(np.column_stack((px, py, pt)),
+                                  np.full(self.n_particles, 1.0 / self.n_particles))
         self.odometry.clear()
 
     # ****** FILTER STAGES ******
@@ -165,9 +140,8 @@ class MCLLocalization:
         # Particles are pushed blind: one that walks into a wall keeps its weight until
         # measurement_update masks it, which is where that check belongs. Weights carry
         # over untouched, motion does not change how well a hypothesis explained the scan.
-        # Particle.__init__ wraps theta into [0, 2pi).
-        particles = [Particle(*new_poses[i]) for i in range(n)]
-        self.particle_set.replace(particles, w.tolist())
+        # replace() wraps theta into [0, 2pi).
+        self.particle_set.replace(new_poses, w)
 
     def measurement_update(self, z):
         """
@@ -230,18 +204,13 @@ class MCLLocalization:
         # Output size comes from config, not the current set, so the count is held at
         # n_particles no matter what the set was handed.
 
-        #TODO: verifiy this code!
-        #TODO: right now no genetic algorithm, resample duplicate good particles which is fine in a way
         n = self.n_particles
         pointers = np.random.uniform(0.0, 1.0 / n) + np.arange(n) / n
         cdf = np.cumsum(w)
         cdf[-1] = 1.0 #float drift can leave the sum at 0.9999..., past which searchsorted runs off the end
         idx = np.searchsorted(cdf, pointers, side="right")
 
-        # Fresh Particle objects rather than shared references, so copies of one parent
-        # never alias each other.
-        particles = [Particle(*poses[i]) for i in idx]
-        self.particle_set.replace(particles, [1.0 / n] * n)
+        self.particle_set.replace(poses[idx], np.full(n, 1.0 / n))
 
     # ****** OUTPUT ******
 
@@ -283,10 +252,10 @@ class MCLLocalization:
         Returns:
             pose (tuple): (x, y, theta), or (0.0, 0.0, 0.0) if the set is empty.
         """
-        particle, _ = self.particle_set.best()
-        if particle is None:
+        pose, _ = self.particle_set.best()
+        if pose is None:
             return 0.0, 0.0, 0.0
-        return particle.pose()
+        return pose
 
     def effective_sample_size(self) -> float:
         """1 / sum(w^2). Falls toward 1 as the weights collapse onto a single particle."""
@@ -299,24 +268,29 @@ class MCLLocalization:
 
     # ****** CALLBACK ******
 
-    def on_scan(self, z, do_resample=True):
+    def on_scan(self, z, do_resample=True, motion=None):
         """
         RangeReceiver callback: one full filter step per scan from the laptop.
 
+        z describes where the robot was when its frame was CAPTURED, not where it is now.
+        Consuming odometry here would also take the motion made while the frame was at the
+        laptop, pushing the cloud ahead of what z describes. So a caller that knows the
+        capture moment consumes the odometry THEN and passes it in as motion; the motion
+        after the capture stays in the accumulator for the next scan.
+
         Args:
             z (np.ndarray): float32, shape (n_rays,), meters. Comes in on the ZMQ receiver thread.
+            motion (tuple): (dx, dy, dtheta) consumed at the frame's capture, see
+                            Odometry.consume. None consumes the odometry now instead.
         """
         z = np.asarray(z, dtype=np.float64).reshape(-1)
         if z.shape[0] != self.n_rays:
             print(f"MCL: expected {self.n_rays} ranges, got {z.shape[0]}, dropping scan")
+            if motion is not None:
+                self.motion_update(*motion) #already consumed by the caller, so it is applied now or never
             return
 
-        # TODO: this scan describes where the robot was when the frame was captured, not
-        # where it is now. The increment below covers everything since the last scan,
-        # INCLUDING the motion that happened after the capture, so the cloud is pushed
-        # slightly ahead of what z actually describes. Rewind by the odometry accumulated
-        # since the capture before updating.
-        dx, dy, dtheta = self.odometry.consume()
+        dx, dy, dtheta = motion if motion is not None else self.odometry.consume()
         self.motion_update(dx, dy, dtheta)
         self.measurement_update(z)
         if do_resample:

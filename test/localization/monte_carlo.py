@@ -48,7 +48,7 @@ mcl.init_particles_gaussian(0.535, 0.89, math.pi/2, sigma_xy=0.1, sigma_theta=0.
 
 ray_receiver = RangeReceiver(callback=mcl.on_scan) #Thread 5: receiver to run one MCL measurement update every time MDE outputs a scan
 
-particle_streamer = ParticleStreamer(mcl, fps=3) #Thread 6: streams the particle cloud, owns its own thread
+particle_streamer = ParticleStreamer(mcl.particle_set, fps=3) #Thread 6: streams the particle cloud, owns its own thread
 
 try:
     while True:

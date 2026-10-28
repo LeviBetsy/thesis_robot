@@ -97,8 +97,8 @@ class VideoReceiver:
     a caller only needs to construct this once and let it run.
 '''
 class ParticleStreamer:
-    def __init__(self, mcl, fps=5, port=5004):
-        self.mcl = mcl
+    def __init__(self, particle_set, fps=5, port=5004):
+        self.particle_set = particle_set
         self.fps = fps
         self.port = port
         self.running = True
@@ -118,7 +118,7 @@ class ParticleStreamer:
 
             # ParticleSet snapshots under its own lock, so a concurrent resample() on the
             # range receiver thread can't hand us a half-swapped set.
-            positions = self.mcl.particle_set.poses()
+            positions = self.particle_set.poses()
             if positions.shape[0] > 0:
                 self.send_point(positions)
 
