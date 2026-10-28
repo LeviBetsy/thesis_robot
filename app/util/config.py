@@ -125,6 +125,21 @@ class StreamConfig:
 
 
 @dataclass
+class NavConfig:
+    """Autonomous nav: A* + stop-turn-go, closed on the encoders, replanned from MCL each step."""
+    lookahead: float           # meters ALONG the path to the aim point (astar.lookahead_point)
+    step_dist: float           # longest single drive before stopping to replan, meters
+    goal_tol: float            # done when the mean pose is this close to the goal, meters
+    heading_tol: float         # skip the turn if already aimed within this, radians
+    turn_cps: int              # wheel speed for an in-place turn, encoder counts per second
+    turn_slow_cps: int         # wheel speed for the last turn_slow_window of a turn
+    turn_slow_window: float    # radians left at which a turn drops to turn_slow_cps
+    drive_cps: int             # wheel speed driving straight
+    turn_brake: float          # coast after stop in a turn, radians: stop this much early (bench measured)
+    drive_brake: float         # coast after stop in a drive, meters: stop this much early (bench measured)
+
+
+@dataclass
 class UartConfig:
     """Link to the MSP432."""
     port: str
@@ -151,6 +166,7 @@ _SECTIONS = {
     "measurement_model": MeasurementModelConfig,
     "mcl": MCLConfig,
     "stream": StreamConfig,
+    "nav": NavConfig,
     "uart": UartConfig,
     "visualizer": VisualizerConfig,
 }
@@ -166,6 +182,7 @@ class Config:
     measurement_model: MeasurementModelConfig
     mcl: MCLConfig
     stream: StreamConfig
+    nav: NavConfig
     uart: UartConfig
     visualizer: VisualizerConfig
 

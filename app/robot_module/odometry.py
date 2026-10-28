@@ -108,6 +108,12 @@ class WheelOdometry(Odometry):
     def __init__(self, robot: Robot):
         super().__init__()
         self.robot = robot
+
+        # Second accumulator fed the same arcs, for the nav step controller: it clear()s and
+        # peek()s this one to close a turn or a drive on the encoders, and never touches the
+        # main accumulator MCL consume()s.
+        self.segment = Odometry()
+
         self.odometry_thread = None
         self._running = False
 
@@ -125,7 +131,7 @@ class WheelOdometry(Odometry):
                 except queue.Empty:
                     continue
                 if prev is not None:
-                    self.update_odom_coordinate(Lcount - prev[0], Rcount - prev[1])
+                    self.update_odom(Lcount - prev[0], Rcount - prev[1])
                 prev = (Lcount, Rcount)
 
         self._running = True
@@ -137,7 +143,7 @@ class WheelOdometry(Odometry):
         notices on the next packet; daemon=True means it dies with the process anyway."""
         self._running = False
 
-    def update_odom_coordinate(self, LCount, RCount):
+    def update_odom(self, LCount, RCount):
         """
         Converts one tachometer packet into an arc and accumulates it.
 
@@ -150,6 +156,7 @@ class WheelOdometry(Odometry):
         d = (dl + dr) / 2 #distance travelled by the midpoint
         delta_theta = (dr - dl) / self.robot.w
         self.accumulate(d, delta_theta)
+        self.segment.accumulate(d, delta_theta)
 
 
 if __name__ == "__main__":

@@ -68,6 +68,18 @@
         "particle_fps": 5,
         "scan_timeout": 1.0
     },
+    "nav": {
+        "lookahead": 0.15,
+        "step_dist": 0.15,
+        "goal_tol": 0.05,
+        "heading_tol": 0.05,
+        "turn_cps": 180,
+        "turn_slow_cps": 60,
+        "turn_slow_window": 0.26,
+        "drive_cps": 180,
+        "turn_brake": 0.0,
+        "drive_brake": 0.0
+    },
     "uart": {
         "port": "/dev/ttyAMA0",
         "baudrate": 115200,
