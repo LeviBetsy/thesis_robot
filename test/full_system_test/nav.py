@@ -41,8 +41,8 @@ MAP_PATH = "config/map/real_map0.json"
 
 # The test scenario, not tunables: where the robot is physically placed at start,
 # (x, y, theta) meters / radians CCW from +x, and where it should drive to, (x, y) meters.
-START_POSE = None #TODO: set before running
-GOAL_XY = None #TODO: set before running, must be a placeable cell
+START_POSE = (0.395, 0.555, math.pi / 2)
+GOAL_XY = (0.37,1.52)
 if START_POSE is None or GOAL_XY is None:
     raise SystemExit("Set START_POSE and GOAL_XY in nav.py first")
 

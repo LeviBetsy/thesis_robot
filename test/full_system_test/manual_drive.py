@@ -12,7 +12,7 @@ import cv2
 from app.robot_module.robot import Robot
 from app.robot_module.uart import MSP432Uart
 from app.robot_module.odometry import WheelOdometry
-from app.control.keyboard_controller_local import LocalKeyboardController
+from app.control.keyboard_controller_ssh import RobotController
 from app.localization.map import OccupancyGrid
 from app.localization.mcl import MCLLocalization
 from app.stream.zmq_stream import VideoStreamer, ParticleStreamer, RangeReceiver
@@ -26,11 +26,12 @@ Pi (this file):
     camera -> undistort -> VideoStreamer          -> laptop (MDE)
     laptop range fan -> RangeReceiver -> mcl.on_scan (motion from WheelOdometry, then measurement, resample)
     mcl particles -> ParticleStreamer             -> laptop (visualizer)
-    wireless keyboard (USB receiver on the Pi, evdev) -> LocalKeyboardController -> UART -> MSP432
+    laptop arrow keys -> ssh tunnel (port 8080) -> RobotController -> UART -> MSP432
 
 Laptop, in separate terminals:
     python laptop/mde_projection/main.py                 # frames in, range fan out
     python laptop/mde_projection/visualize_map_main.py   # particle cloud on the map
+    python laptop/keyboard_control/keyboard_stream.py    # arrow keys out, over the ssh tunnel
 '''
 
 MAP_PATH = "config/map/real_map0.json"
@@ -48,8 +49,8 @@ msp432_uart = MSP432Uart(port=config.uart.port, baudrate=config.uart.baudrate, t
 msp432_uart.start_receiving() #THREAD 1: listen to cumulative encoder counts from MSP432 and fill data_queue
 
 #Keyboard Controller
-controller = LocalKeyboardController(msp432_uart.send_command)
-controller.start() #THREAD 2: read arrow keys from the wireless keyboard on the Pi and forward left_cps,right_cps to msp432
+controller = RobotController(msp432_uart.send_command)
+controller.start() #THREAD 2: listen for left_cps,right_cps from the laptop over the ssh tunnel and forward to msp432
 
 # Monte Carlo Localization against the known map, motion stage fed by the wheel encoders
 odometry = WheelOdometry(robot)
@@ -91,7 +92,7 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera.w)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.h)
 
 if __name__ == "__main__":
-    print("Manual drive MCL test running. Drive with the arrow keys on the Pi's wireless keyboard. Ctrl+C to stop.")
+    print("Manual drive MCL test running. Drive with keyboard_stream.py on the laptop. Ctrl+C to stop.")
     last_print = time.monotonic()
     sent_at = 0.0
     try:

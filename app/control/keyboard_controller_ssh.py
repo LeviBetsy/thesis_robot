@@ -27,6 +27,15 @@
 
 import socket
 import threading
+import time
+
+# The last command is re-sent over UART this often (seconds), so a single packet the MSP432
+# drops doesn't leave the robot ignoring a key
+RESEND_PERIOD = 0.1
+
+# keyboard_stream.py re-sends its command every 0.1 s. Hearing nothing for this long (seconds)
+# means the WiFi link stalled, so the robot is stopped instead of driving on the last command
+COMMAND_TIMEOUT = 0.5
 
 class RobotController:
     def __init__(self, command_callback, port=8080):
@@ -49,19 +58,32 @@ class RobotController:
             try:
                 conn, addr = self.sock.accept()
                 print(f"Connected by {addr}")
+                conn.settimeout(RESEND_PERIOD) # recv wakes up to resend and check the watchdog
+                current_cmd = (0, 0)
+                last_heard = time.monotonic()
+                buffer = ""
                 with conn:
                     while self.running:
-                        data = conn.recv(1024)
-                        if not data:
-                            break 
-                        
-                        msg = data.decode('utf-8')
-                        # Handle multiple commands if they arrive stuck together
-                        for cmd_str in msg.strip().split('\n'):
-                            if cmd_str:
-                                parts = [int(x) for x in cmd_str.split(',')]
+                        try:
+                            data = conn.recv(1024)
+                            if not data:
+                                break
+                            # TCP is a byte stream, a command can be split across two recvs, so keep the unfinished tail
+                            buffer += data.decode('utf-8')
+                            *lines, buffer = buffer.split('\n')
+                            for cmd_str in lines:
+                                parts = [int(x) for x in cmd_str.split(',')] if cmd_str else []
                                 if len(parts) == 2:
-                                    self.command_callback(parts[0], parts[1])
+                                    current_cmd = (parts[0], parts[1])
+                                    last_heard = time.monotonic()
+                        except socket.timeout:
+                            pass
+                        if time.monotonic() - last_heard > COMMAND_TIMEOUT and current_cmd != (0, 0):
+                            print("No command from the laptop in time, stopping")
+                            current_cmd = (0, 0)
+                        self.command_callback(*current_cmd) # new command, or resend of the current one
+                print("Laptop disconnected")
+                self.command_callback(0, 0) # Safety stop
             except Exception as e:
                 print(f"Connection lost or error: {e}")
                 self.command_callback(0, 0) # Safety stop

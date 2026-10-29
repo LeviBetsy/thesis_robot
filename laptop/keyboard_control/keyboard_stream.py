@@ -8,6 +8,7 @@
 import socket
 import os
 import time
+import threading
 from dotenv import load_dotenv
 from pynput import keyboard
 
@@ -30,17 +31,22 @@ def connect_to_pi():
 FULL_CPS = 360
 HALF_CPS = 180
 
+# The current command is re-sent this often (seconds) as a heartbeat. The Pi's RobotController
+# stops the robot when it hears nothing for COMMAND_TIMEOUT, so this must stay well below that
+RESEND_PERIOD = 0.1
+
 pressed_keys = set()
 current_cmd = (0, 0)
+send_lock = threading.Lock() # the key listener and the heartbeat thread share the socket
 
 def send_to_pi(left_cps, right_cps):
     global current_cmd
-    if (left_cps, right_cps) != current_cmd:
-        # We add a newline \n so the Pi knows where one command ends and the next begins
-        msg = f"{left_cps},{right_cps}\n"
+    current_cmd = (left_cps, right_cps)
+    # We add a newline \n so the Pi knows where one command ends and the next begins
+    msg = f"{left_cps},{right_cps}\n"
+    with send_lock:
         try:
             sock.sendall(msg.encode('utf-8'))
-            current_cmd = (left_cps, right_cps)
             # print(f"Sent: {msg.strip()}")
         except Exception as e:
             print(f"Send failed: {e}")
@@ -73,7 +79,13 @@ def on_release(key):
         pressed_keys.remove(key)
         update_logic()
 
+def heartbeat():
+    while True:
+        time.sleep(RESEND_PERIOD)
+        send_to_pi(*current_cmd)
+
 if __name__ == "__main__":
     if connect_to_pi():
+        threading.Thread(target=heartbeat, daemon=True).start()
         with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
             listener.join()
