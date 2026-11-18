@@ -13,7 +13,10 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 if root_path not in sys.path:
     sys.path.append(root_path)
 
-from ai_models.DAV2.metric_depth.depth_anything_v2.dpt import DepthAnythingV2
+# Relative-depth architecture (ReLU/Identity head) to match the relative checkpoint
+# depth_anything_v2_{encoder}.pth. The metric_depth variant has a Sigmoid*max_depth head
+# that loads these weights silently but squashes the output to 20*sigmoid(d_rel).
+from ai_models.DAV2.depth_anything_v2.dpt import DepthAnythingV2
 
 
 

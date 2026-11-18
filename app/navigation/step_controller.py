@@ -14,20 +14,20 @@ Executes one nav step on the encoders: turn in place by dtheta, or drive straigh
 
 MCL decides the step (once, from the mean pose), this carries it out. MCL is too slow and
 stale to close a turn on (~35 deg of spin per scan at turn_cps), the encoders are not:
-each call clears odometry.segment and polls it until the target is reached. The main
+each call clears odometry.nav_odometry and polls it until the target is reached. The main
 accumulator MCL consume()s is never touched.
 
 Sign convention matches world theta and the keyboard controllers: positive dtheta is CCW,
 i.e. left wheel back, right wheel forward.
 '''
 
-POLL_PERIOD = 0.005 #seconds between segment reads, encoder packets arrive faster than this
+POLL_PERIOD = 0.005 #seconds between nav_odometry reads, encoder packets arrive faster than this
 
 
 class StepController:
     def __init__(self, msp432_uart: MSP432Uart, odometry: WheelOdometry, config: Config):
         self.uart = msp432_uart
-        self.segment = odometry.segment
+        self.nav_odometry = odometry.nav_odometry
         self.nav = config.nav
         self.current_cmd = None
 
@@ -52,9 +52,9 @@ class StepController:
         sign = 1 if dtheta > 0 else -1
         target = abs(dtheta) - self.nav.turn_brake #send stop early, the robot coasts the rest
 
-        self.segment.clear()
+        self.nav_odometry.clear()
         while True:
-            turned = sign * self.segment.peek()[2] #progress in the commanded direction
+            turned = sign * self.nav_odometry.peek()[2] #progress in the commanded direction
             remaining = target - turned
             if remaining <= 0:
                 break
@@ -72,8 +72,12 @@ class StepController:
         """
         target = d - self.nav.drive_brake #send stop early, the robot coasts the rest
 
-        self.segment.clear()
-        while self.segment.peek()[0] < target: #dx, along the heading the drive started on
-            self.send(self.nav.drive_cps, self.nav.drive_cps)
+        self.nav_odometry.clear()
+        while True:
+            remaining = target - self.nav_odometry.peek()[0] #dx, along the heading the drive started on
+            if remaining <= 0:
+                break
+            cps = self.nav.drive_cps if remaining > self.nav.drive_slow_window else self.nav.drive_slow_cps
+            self.send(cps, cps)
             time.sleep(POLL_PERIOD)
         self.stop()

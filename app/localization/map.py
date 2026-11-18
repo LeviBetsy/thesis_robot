@@ -67,6 +67,12 @@ class OccupancyGrid:
         occupied = self.data[np.clip(row, 0, self.rows - 1), np.clip(col, 0, self.cols - 1)] > occ_threshold
         return inside & ~occupied
 
+    def free_mask(self) -> np.ndarray:
+        """Boolean (rows, cols), True where is_placeable accepts the cell centre."""
+        rows, cols = np.mgrid[0:self.rows, 0:self.cols]
+        x, y = self.grid_to_world(rows, cols)
+        return self.is_placeable(x, y)
+
     # verified not tested
     def add_wall(self, x1, y1, x2, y2, placeable_margin=0.7, placeable_radius=0.05):
         """

@@ -64,7 +64,6 @@ def static_inspection():
 
     pcd = mde_depth.frame_to_pcd(frame)
     rel_depth = mde_depth.rel_depth
-    print(f"min calibrated rel is: {mde_depth.fsc.min_calibrated_rel}")
     visualizer.update(pcd)
     def click_event(event, x, y, flags, param):
         # Check if the event was a left mouse button click
@@ -108,9 +107,44 @@ def static_process(path):
     visualizer.close()
     cv2.destroyAllWindows()
 
+def static_calibration_plot(path):
+    """Runs MDE on a single image, fits the floor scale calibration, and saves the fsc plot to data/plot/."""
+    mde_depth = MDE_Depth(config)
+    frame = cv2.imread(path)
+
+    rel_depth = mde_depth.process_rel(frame)
+    plot_file = f"fsc_{os.path.splitext(os.path.basename(path))[0]}.png"
+    mde_depth.fsc.scale_calibration(rel_depth, plot=True, plot_file=plot_file, plot_line=False)
+
+def benchmark_latency(path, n_iters=50, n_warmup=5):
+    """Feeds the same frame through the real_time_stream per-frame pipeline n_iters times and prints per-stage latency."""
+    mde_depth = MDE_Depth(config)
+    frame = cv2.imread(path)
+
+    def run_once():
+        t0 = time.perf_counter()
+        pcd = mde_depth.frame_to_pcd(frame)
+        t1 = time.perf_counter()
+        mde_depth.pcd_to_ray_casting(pcd, n_rays=config.ray_cast.n_rays,
+                                     max_range=config.ray_cast.max_range)
+        t2 = time.perf_counter()
+        return t1 - t0, t2 - t1
+
+    for _ in range(n_warmup): #first passes include MPS kernel compile / allocation, not representative
+        run_once()
+
+    times = np.array([run_once() for _ in range(n_iters)]) * 1000 #shape (n_iters, 2), ms
+    stages = {"frame_to_pcd": times[:, 0], "ray_casting": times[:, 1], "total": times.sum(axis=1)}
+    print(f"Latency over {n_iters} iters ({n_warmup} warmup), frame {frame.shape[1]}x{frame.shape[0]}:")
+    for name, t in stages.items():
+        print(f"  {name:13s} mean {t.mean():7.2f} ms | median {np.median(t):7.2f} ms | max {t.max():7.2f} ms")
+    print(f"  throughput    {1000 / stages['total'].mean():.2f} FPS")
+
 
 if __name__ == "__main__":
     # static_inspection()
-    # real_time_stream(cv_show=True, visualize=True)
-    real_time_stream()
+    real_time_stream(cv_show=False, visualize=False)
+    # real_time_stream()
     # static_process("./data/ref23.jpg")
+    # static_calibration_plot("./data/checkerboard/ref13.jpg")
+    # benchmark_latency("./data/checkerboard/ref13.jpg")

@@ -5,7 +5,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 import numpy as np
 
 from app.perception.dav2_pth import DepthAnythingPredictor
-from app.perception.dav2_onnx import DepthAnythingONNXPredictor
 from app.robot_module.robot import Robot
 from app.perception.scale_calibration import FloorScaleCalibration
 from app.perception.point_cloud_proj import PointCloudProjection

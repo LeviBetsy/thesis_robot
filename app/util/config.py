@@ -119,6 +119,8 @@ class StreamConfig:
     video_port: int
     particle_port: int
     range_port: int
+    nav_port: int              # A* path + lookahead aim, once per nav step
+    goal_port: int             # goal (x, y) picked in the laptop's map visualizer, laptop -> Pi
     particle_fps: int
     scan_timeout: float        # seconds the Pi waits for a frame's range fan before giving
                                # up on it and sending a fresh one (lockstep, see manual_drive)
@@ -135,6 +137,8 @@ class NavConfig:
     turn_slow_cps: int         # wheel speed for the last turn_slow_window of a turn
     turn_slow_window: float    # radians left at which a turn drops to turn_slow_cps
     drive_cps: int             # wheel speed driving straight
+    drive_slow_cps: int        # wheel speed for the last drive_slow_window of a drive
+    drive_slow_window: float   # meters left at which a drive drops to drive_slow_cps
     turn_brake: float          # coast after stop in a turn, radians: stop this much early (bench measured)
     drive_brake: float         # coast after stop in a drive, meters: stop this much early (bench measured)
 

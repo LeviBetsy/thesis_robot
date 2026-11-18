@@ -112,7 +112,7 @@ class WheelOdometry(Odometry):
         # Second accumulator fed the same arcs, for the nav step controller: it clear()s and
         # peek()s this one to close a turn or a drive on the encoders, and never touches the
         # main accumulator MCL consume()s.
-        self.segment = Odometry()
+        self.nav_odometry = Odometry()
 
         self.odometry_thread = None
         self._running = False
@@ -156,7 +156,7 @@ class WheelOdometry(Odometry):
         d = (dl + dr) / 2 #distance travelled by the midpoint
         delta_theta = (dr - dl) / self.robot.w
         self.accumulate(d, delta_theta)
-        self.segment.accumulate(d, delta_theta)
+        self.nav_odometry.accumulate(d, delta_theta)
 
 
 if __name__ == "__main__":

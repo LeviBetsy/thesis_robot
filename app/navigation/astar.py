@@ -22,20 +22,14 @@ NEIGHBOURS = [(-1, 0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
               (-1, -1, SQRT2), (-1, 1, SQRT2), (1, -1, SQRT2), (1, 1, SQRT2)]
 
 
-def octile(a, b):
-    """Cost of the cheapest 8-connected path from cell a to cell b on an empty grid:
-    go diagonal until lined up with b, then straight the rest of the way."""
+def h(a, b):
+    """A* heuristic, octile distance: cost of the cheapest 8-connected path from cell a to
+    cell b on an empty grid, go diagonal until lined up with b, then straight the rest of the way.
+    Walls only lengthen the real path, so this never overestimates (admissible)."""
     dr, dc = abs(a[0] - b[0]), abs(a[1] - b[1])
     diagonals = min(dr, dc)
     straights = max(dr, dc) - diagonals
     return SQRT2 * diagonals + straights
-
-
-def free_mask(grid: OccupancyGrid) -> np.ndarray:
-    """Boolean (rows, cols), True where grid.is_placeable accepts the cell centre."""
-    rows, cols = np.mgrid[0:grid.rows, 0:grid.cols]
-    x, y = grid.grid_to_world(rows, cols)
-    return grid.is_placeable(x, y)
 
 
 def nearest_free(free: np.ndarray, row, col):
@@ -60,7 +54,7 @@ def astar(grid: OccupancyGrid, start_xy, goal_xy):
     Returns:
         path (list): world (x, y) cell centres from start to goal, or None if unreachable.
     """
-    free = free_mask(grid)
+    free = grid.free_mask()
     in_grid = lambda r, c: 0 <= r < grid.rows and 0 <= c < grid.cols
 
     start = tuple(int(v) for v in grid.world_to_grid(*start_xy))
@@ -73,7 +67,7 @@ def astar(grid: OccupancyGrid, start_xy, goal_xy):
 
     g = {start: 0.0} #cheapest known cost from start to each cell
     parent = {start: None}
-    open_heap = [(octile(start, goal), start)] #(g + heuristic, cell)
+    open_heap = [(h(start, goal), start)] #(f = g + h, cell)
     closed = set()
 
     while open_heap:
@@ -100,7 +94,7 @@ def astar(grid: OccupancyGrid, start_xy, goal_xy):
             if ng < g.get((nr, nc), math.inf):
                 g[(nr, nc)] = ng
                 parent[(nr, nc)] = cell
-                heapq.heappush(open_heap, (ng + octile((nr, nc), goal), (nr, nc)))
+                heapq.heappush(open_heap, (ng + h((nr, nc), goal), (nr, nc)))
 
     return None
 
@@ -167,7 +161,7 @@ if __name__ == "__main__":
     aim = lookahead_point(grid, path, start_xy, config.nav.lookahead)
     print(f"Path: {len(path)} cells, first aim point ({aim[0]:.3f}, {aim[1]:.3f})")
 
-    free = free_mask(grid)
+    free = grid.free_mask()
     px, py = zip(*path)
     plt.imshow(free, origin="lower", cmap="gray",
                extent=(0, grid.cols * grid.cell_size, 0, grid.rows * grid.cell_size))

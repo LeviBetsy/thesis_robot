@@ -35,7 +35,7 @@ class FloorScaleCalibration:
         data = np.load(z_file)
         return data['cornersOrg'], data['z_real'].squeeze() #squeze zreal because it is shape (N, 1)
 
-    def plot_scale_calibration(self, plot_fpath, blocks):
+    def plot_scale_calibration(self, plot_fpath, blocks, plot_line=True):
         plot_dir = self.project_root / "data" / "plot"
         # Ensure the directory exists
         plot_dir.mkdir(parents=True, exist_ok=True) 
@@ -56,7 +56,7 @@ class FloorScaleCalibration:
             ax.scatter(x_data, y_data, alpha=0.9, color=block_color, edgecolors='none', s=20)
 
         # Plot piecewise linear segments
-        for i, (a, b) in enumerate(self.fits):
+        for i, (a, b) in enumerate(self.fits if plot_line else []):
             x_start = self.segment_mins[i]
             
             # The last segment ends at max_calibrated_rel, others end at the next segment's min
@@ -84,7 +84,7 @@ class FloorScaleCalibration:
         
         print(f"Plot successfully saved to {plot_path}")
 
-    def scale_calibration(self, d_rel, plot=False, plot_file=""): 
+    def scale_calibration(self, d_rel, plot=False, plot_file="", plot_line=True):
         self.reset_calibration()
 
 
@@ -153,7 +153,7 @@ class FloorScaleCalibration:
         
         #Plot
         if plot:
-            self.plot_scale_calibration(plot_file, filtered_blocks)
+            self.plot_scale_calibration(plot_file, filtered_blocks, plot_line=plot_line)
 
     
     def relative_to_metric(self, d_rel: np.array, extrapolate= False) -> np.array:
@@ -171,34 +171,4 @@ class FloorScaleCalibration:
         result[valid_mask] = 1 / (slopes * valid_vals + intercepts)
         return result
     
-    def annotate_floor(self, frame: np.ndarray, out_fpath: str = "", save=False, puttext=False,):
-        ''' Takes in an image and annotate the floor pixels on that image 
-        and save the annotated image to data/floor_verificaiton/out_fpath'''
-        save_dir = self.project_root / "data" / "floor_verification"
-        # Ensure the directory exists
-        save_path = Path(str(save_dir / out_fpath))
-
-        annotated_img = frame.copy()
-    
-        # Define cosmetic parameters for the markers
-        circle_color = (0, 0, 255)     # Red for the circle
-        text_color = (0, 255, 0)       # Green for the text
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.3
-        thickness = 1
-        
-        for block in self.pixel_blocks:
-            for x, y, z in block:
-                center = (int(x), int(y))
-                cv2.circle(annotated_img, center, radius=5, color=circle_color, thickness=-1)
-                if puttext:
-                    text = f"{(1/z):.2f}"
-                    text_position = (center[0] + 10, center[1] + 5)
-                    cv2.putText(annotated_img, text, text_position, font, font_scale, text_color, thickness, cv2.LINE_AA)
-
-        if save:
-            success = cv2.imwrite(save_path, annotated_img)
-            print(success)
-        return annotated_img
-
 

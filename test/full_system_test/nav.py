@@ -16,35 +16,39 @@ from app.localization.map import OccupancyGrid
 from app.localization.mcl import MCLLocalization
 from app.navigation.astar import astar, lookahead_point
 from app.navigation.step_controller import StepController
-from app.stream.zmq_stream import VideoStreamer, ParticleStreamer, RangeReceiver
+from app.stream.zmq_stream import VideoStreamer, ParticleStreamer, RangeReceiver, NavStreamer, GoalReceiver
 from app.util.config import Config
 #********************************************** IMPORTS **********************************************
 
 '''
-Full system test: drive the real robot from START_POSE to GOAL_XY on its own while MCL tracks it.
+Full system test: drive the real robot on its own to goals clicked on the laptop's map while MCL tracks it.
 
 Pi (this file):
     camera -> undistort -> VideoStreamer          -> laptop (MDE)
     laptop range fan -> RangeReceiver -> mcl.on_scan (motion from WheelOdometry, then measurement, resample)
     mcl particles -> ParticleStreamer             -> laptop (visualizer)
+    laptop picked cell -> GoalReceiver -> goal[0]
     nav thread: mean pose -> A* -> lookahead point -> StepController turn + drive -> UART -> MSP432
 
 Each nav step: wait for one range fan captured after the last stop, read the mean pose,
-replan, turn toward the lookahead point, drive up to step_dist, stop. Repeat until goal_tol.
+replan to the current goal, turn toward the lookahead point, drive up to step_dist, stop.
+Within goal_tol (or no path), idle until a new goal is picked. The goal starts at START_POSE,
+so the robot holds still until the first pick.
 
 Laptop, in separate terminals:
     python laptop/mde_projection/main.py                 # frames in, range fan out
-    python laptop/mde_projection/visualize_map_main.py   # particle cloud on the map
+    python laptop/mde_projection/visualize_map_main.py   # particle cloud on the map, click a cell to send a goal
 '''
 
 MAP_PATH = "config/map/real_map0.json"
 
-# The test scenario, not tunables: where the robot is physically placed at start,
-# (x, y, theta) meters / radians CCW from +x, and where it should drive to, (x, y) meters.
+# The test scenario, not a tunable: where the robot is physically placed at start,
+# (x, y, theta) meters / radians CCW from +x. Goals come from the laptop's map visualizer.
 START_POSE = (0.395, 0.555, math.pi / 2)
-GOAL_XY = (0.37,1.52)
-if START_POSE is None or GOAL_XY is None:
-    raise SystemExit("Set START_POSE and GOAL_XY in nav.py first")
+
+# Current goal (x, y) meters, replaced whole by the goal receiver thread. Seeded with the start
+# so the robot sits "at its goal" until one is picked, no separate no-goal case needed.
+goal = [START_POSE[:2]]
 
 #Robot
 config = Config.load()
@@ -58,6 +62,11 @@ msp432_uart.start_receiving() #THREAD 1: listen to cumulative encoder counts fro
 odometry = WheelOdometry(robot)
 grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0)
 mcl = MCLLocalization(robot=robot, grid=grid, config=config, odometry=odometry)
+
+# The pose nav steers from, also streamed to the visualizer so the highlighted pose is the one in use.
+# Swap to mcl.estimate_best_particle to test the best particle instead of the weighted mean.
+POSE_ESTIMATE = mcl.estimate_mean_pose
+
 mcl.init_particles_gaussian(*START_POSE,
                             sigma_x=config.mcl.init_sigma_x,
                             sigma_y=config.mcl.init_sigma_y,
@@ -67,7 +76,7 @@ mcl.init_particles_gaussian(*START_POSE,
 # Started after seeding so motion from before the cloud existed is never applied to it
 odometry.init_odometry_thread(msp432_uart) #THREAD 2: fold encoder deltas into both motion accumulators
 
-# Turns and drives closed on odometry.segment, the nav thread's own accumulator
+# Turns and drives closed on odometry.nav_odometry, the nav thread's own accumulator
 step_controller = StepController(msp432_uart, odometry, config)
 
 # Lockstep with the laptop, same as manual_drive: one frame in flight at a time, so the range
@@ -90,7 +99,16 @@ streamer = VideoStreamer(port=config.stream.video_port) #frames to the laptop's 
 ray_receiver = RangeReceiver(host=config.stream.laptop_host, port=config.stream.range_port,
                              callback=on_range) #THREAD 3: one MCL step per range fan from the laptop
 particle_streamer = ParticleStreamer(mcl.particle_set, fps=config.stream.particle_fps,
-                                     port=config.stream.particle_port) #THREAD 4: particle cloud to the laptop
+                                     port=config.stream.particle_port,
+                                     estimate=POSE_ESTIMATE) #THREAD 4: particle cloud + pose estimate to the laptop
+nav_streamer = NavStreamer(port=config.stream.nav_port) #A* path + aim to the laptop, sent from the nav thread
+
+def on_goal(x, y):
+    goal[0] = (x, y) #one tuple swap, so the nav thread never reads a half-updated goal
+    print(f"New goal ({x:.3f}, {y:.3f})")
+
+goal_receiver = GoalReceiver(host=config.stream.laptop_host, port=config.stream.goal_port,
+                             callback=on_goal) #THREAD 5: goals picked in the laptop's map visualizer
 
 #Camera
 camera = robot.camera
@@ -99,6 +117,7 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera.w)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.h)
 
 FAN_POLL = 0.01 #seconds between checks for a fresh fan
+GOAL_POLL = 0.1 #seconds between checks for a new goal while idle
 
 def wait_for_fan_after(t):
     """
@@ -114,22 +133,34 @@ def wait_for_fan_after(t):
 nav_done = threading.Event() #set by the nav thread when it finishes, the main loop exits on it
 
 def nav_loop():
-    """THREAD 5: stop-turn-go until the mean pose is within goal_tol of GOAL_XY."""
+    """
+    THREAD 6: stop-turn-go toward goal[0], replanned every step so a goal picked mid-run takes
+    over at the next step. Once the goal is reached or unreachable, idles until a different one arrives.
+    """
     nav = config.nav
     stopped_at = time.monotonic()
+    idle_for = None #goal already reached or found unreachable, skipped until goal[0] changes
     try:
         while True:
-            wait_for_fan_after(stopped_at)
-            x, y, theta = mcl.estimate_mean_pose()
-            if math.hypot(GOAL_XY[0] - x, GOAL_XY[1] - y) <= nav.goal_tol:
-                print(f"Goal reached at x={x:.3f} y={y:.3f}")
-                return
+            goal_xy = goal[0] #read once, the receiver may swap it mid-step
+            if goal_xy == idle_for:
+                time.sleep(GOAL_POLL)
+                continue
 
-            path = astar(grid, (x, y), GOAL_XY)
+            wait_for_fan_after(stopped_at)
+            x, y, theta = POSE_ESTIMATE()
+            if math.hypot(goal_xy[0] - x, goal_xy[1] - y) <= nav.goal_tol:
+                print(f"Goal reached at x={x:.3f} y={y:.3f}, waiting for a new goal")
+                idle_for = goal_xy
+                continue
+
+            path = astar(grid, (x, y), goal_xy)
             if path is None:
-                print(f"No path from x={x:.3f} y={y:.3f} to the goal, stopping")
-                return
+                print(f"No path from x={x:.3f} y={y:.3f} to ({goal_xy[0]:.3f}, {goal_xy[1]:.3f}), waiting for a new goal")
+                idle_for = goal_xy
+                continue
             aim = lookahead_point(grid, path, (x, y), nav.lookahead)
+            nav_streamer.send_nav(path, aim)
 
             dx, dy = aim[0] - x, aim[1] - y
             dtheta = math.atan2(dy, dx) - theta
@@ -146,7 +177,7 @@ def nav_loop():
 
 
 if __name__ == "__main__":
-    print(f"Autonomous nav test: {START_POSE} -> {GOAL_XY}. Ctrl+C to stop.")
+    print(f"Autonomous nav test from {START_POSE}. Pick goals in the map visualizer. Ctrl+C to stop.")
     threading.Thread(target=nav_loop, daemon=True).start()
     sent_at = 0.0
     try:
@@ -180,6 +211,8 @@ if __name__ == "__main__":
         odometry.stop()
         ray_receiver.stop()
         particle_streamer.stop()
+        nav_streamer.stop()
+        goal_receiver.stop()
         streamer.stop()
         cap.release()
         msp432_uart.close()
