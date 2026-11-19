@@ -57,6 +57,40 @@ def real_time_stream(cv_show=False, visualize=False):
         if visualize: visualizer.close()
         cv2.destroyAllWindows()
 
+def real_time_visualize(cv_show=False):
+    """Receives Pi frames and visualizes the full pcd (ground kept); nothing is streamed back to the Pi."""
+    mde_depth = MDE_Depth(config)
+
+    display_frame = [None]
+    new_frame = threading.Event()
+    def callback_new_video(frame):
+        display_frame[0] = frame
+        new_frame.set()
+    video_receiver = VideoReceiver(host=config.stream.pi_host, port=config.stream.video_port,
+                                   callback=callback_new_video)
+    visualizer = PointCloudVisualizer()
+    try:
+        while True:
+            if not new_frame.wait(timeout=1.0):
+                continue
+            new_frame.clear()
+            frame = display_frame[0]
+
+            pcd = mde_depth.frame_to_pcd(frame, delete_ground=False)
+            visualizer.update(pcd)
+
+            if cv_show:
+                cv2.imshow("Video Feed", frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+    except KeyboardInterrupt:
+        print("Stopping...")
+    finally:
+        video_receiver.stop()
+        visualizer.close()
+        cv2.destroyAllWindows()
+
 def static_inspection():
     mde_depth = MDE_Depth(config)
     visualizer = PointCloudVisualizer()
@@ -114,7 +148,7 @@ def static_calibration_plot(path):
 
     rel_depth = mde_depth.process_rel(frame)
     plot_file = f"fsc_{os.path.splitext(os.path.basename(path))[0]}.png"
-    mde_depth.fsc.scale_calibration(rel_depth, plot=True, plot_file=plot_file, plot_line=False)
+    mde_depth.fsc.scale_calibration(rel_depth, plot=True, plot_file=plot_file, plot_line=True)
 
 def benchmark_latency(path, n_iters=50, n_warmup=5):
     """Feeds the same frame through the real_time_stream per-frame pipeline n_iters times and prints per-stage latency."""
@@ -145,6 +179,7 @@ if __name__ == "__main__":
     # static_inspection()
     real_time_stream(cv_show=False, visualize=False)
     # real_time_stream()
+    # real_time_visualize(cv_show=True)
     # static_process("./data/ref23.jpg")
     # static_calibration_plot("./data/checkerboard/ref13.jpg")
     # benchmark_latency("./data/checkerboard/ref13.jpg")

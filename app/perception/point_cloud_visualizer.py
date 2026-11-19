@@ -10,6 +10,11 @@ class PointCloudVisualizer:
         self.axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
         self.vis.add_geometry(self.pcd)
         self.vis.add_geometry(self.axes)
+        # Clip planes default to the bbox at add_geometry time (empty pcd + 0.1m axes), which clips real points;
+        # pin them so update_geometry never needs a bbox reset
+        ctr = self.vis.get_view_control()
+        ctr.set_constant_z_near(0.01)
+        ctr.set_constant_z_far(100.0)
         self.cmap = plt.get_cmap("turbo")
 
     def update(self, pcd: np.ndarray):

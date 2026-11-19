@@ -41,7 +41,6 @@ cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera.w)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, camera.h)
 
-# TODO: account for latency from returning laptop, might not be where we are, actually keep track of an accumulated motion for that
 
 def callback_new_pcd(pcd):
     pass

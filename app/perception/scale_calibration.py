@@ -14,8 +14,9 @@ class FloorScaleCalibration:
         stacked_floor = np.column_stack((self.floor_pixels, inv_z_points)) #shape (N,3)
         sort_idx = np.argsort(stacked_floor[:, 1])
         sorted_floor_px = stacked_floor[sort_idx]
-        # floor_lst[0] shows the row furthest to the camera and opposite for floor_lst[N] 
-        self.group_n = group_n
+        # pixel_blocks[0] is the row furthest from the camera and opposite for pixel_blocks[N-1]
+        # Only the two closest rows (pixel_blocks[-2:]) are used for calibration
+        self.group_n = group_n # number of checkerboard rows
         self.pixel_blocks = np.vsplit(sorted_floor_px, self.group_n) #returns a lst of N nparray
 
         self.reset_calibration()
@@ -23,10 +24,8 @@ class FloorScaleCalibration:
         
 
     def reset_calibration(self):
-        self.min_calibrated_rel = 0 #default min_calibrated_rel, further away points == smaller relative distance
-        self.max_calibrated_rel = 100
-        self.fits = None
-        self.segment_mins = None
+        self.slope = None # single linear fit: z^-1 = slope * d_rel + intercept
+        self.intercept = None
 
     def read_gt_floor_z(self, gt_z_file_path) -> tuple[np.ndarray, np.ndarray]:
         # Reading ground truth z for points on the floor 
@@ -55,21 +54,11 @@ class FloorScaleCalibration:
             # Scatter plot for the raw data points
             ax.scatter(x_data, y_data, alpha=0.9, color=block_color, edgecolors='none', s=20)
 
-        # Plot piecewise linear segments
-        for i, (a, b) in enumerate(self.fits if plot_line else []):
-            x_start = self.segment_mins[i]
-            
-            # The last segment ends at max_calibrated_rel, others end at the next segment's min
-            if i < len(self.fits) - 1:
-                x_end = self.segment_mins[i + 1]
-            else:
-                x_end = self.max_calibrated_rel
-                
-            # Since it's a straight line, we only need the start and end coordinates
-            x_line = np.array([x_start, x_end])
-            y_line = a * x_line + b
-            
-            # Plot the segment
+        # Plot the single linear fit across the calibrated d_rel range
+        if plot_line and self.slope is not None:
+            all_rel = np.vstack(blocks)[:, 0]
+            x_line = np.array([all_rel.min(), all_rel.max()])
+            y_line = self.slope * x_line + self.intercept
             ax.plot(x_line, y_line, color='red', linewidth=2, alpha = 0.5)
 
         # Format axes using LaTeX notation
@@ -88,87 +77,38 @@ class FloorScaleCalibration:
         self.reset_calibration()
 
 
-        # Extracting drel, turning self.pixel_blocks lst(nparray(6,3)) into rel_blocks lst(nparray(6,2))
+        # Extracting drel for the two closest rows only, turning each pixel block nparray(6,3) into a rel block nparray(6,2)
         rel_blocks = []
-        for i, coords in enumerate(self.pixel_blocks):
+        for coords in self.pixel_blocks[-2:]:
             x_coords, y_coords = coords[:, 0].astype(int), coords[:, 1].astype(int)
             inv_z = coords[:, 2] #shape (6,)
             rel_depth = d_rel[y_coords, x_coords] #shape (6,)
             rel_blocks.append(np.column_stack((rel_depth, inv_z)))
+        far_block, near_block = rel_blocks # near_block is the closest row, far_block is the row behind it
+
+        # Obstacle check: a far-row point is floor only if it is further (smaller d_rel) than the near-row point
+        keep_mask = far_block[:, 0] < near_block[:, 0]
+        filtered_blocks = [far_block[keep_mask], near_block]
 
 
-        # Filter to make sure only floor pixels are used for calculation
-        filtered_blocks = rel_blocks
-        floor_mask = np.ones(len(filtered_blocks[-1]), dtype=bool) # Starts as all True. Once a point fails, it becomes False forever.
-        min_rel = filtered_blocks[-1][:, 0].copy()
-
-        for i in range(len(filtered_blocks) - 2, -1, -1): # loop from closest points, to furthest point (index 0)
-            current_rel = filtered_blocks[i][:, 0]
-            # A point is kept if its depth is strictly less than the minimum depth seen so far
-            keep_mask = current_rel < min_rel
-
-            freshly_invalid_mask = floor_mask & ~keep_mask
-    
-            if freshly_invalid_mask.any():
-                single_min_invalid = current_rel[freshly_invalid_mask].min()
-                # self.min_calibrated_rel = min(self.min_calibrated_rel, single_min_invalid)
-            
-            # Update the global valid mask (bitwise AND). 
-            # If a point was already filtered, or fails this step, it becomes/stays False.
-            floor_mask &= keep_mask
-            
-            # Apply the accumulated mask to the current block exactly ONCE
-            filtered_blocks[i] = filtered_blocks[i][floor_mask]
-
-            # Update min_rel for the next iteration (we only care about updating it for surviving points)
-            min_rel[floor_mask] = current_rel[floor_mask]
-
-        
-
-        # groupings are tuple of (i, group_i) where group_i is block_i U block_i+1
-        groupings = [np.vstack((curr_block, next_block))
-            for (curr_block, next_block) in zip(filtered_blocks[:-1], filtered_blocks[1:])
-            if len(curr_block) > 0 and len(next_block) > 0
-        ] #grouping first block with next block, groupingmust be made of 2 blocks that are not empty or it is not valid
-        n_segment = len(groupings)
-        if n_segment > 0:
-            self.min_calibrated_rel = groupings[0][:, 0].min() #grouping 0 is furthest points => min d_rel
-            self.max_calibrated_rel = groupings[-1][:, 0].max() #grouping n is closest points => max d_rel
+        # Single linear fit over the surviving points of the two closest rows
+        data_points = np.vstack(filtered_blocks) #shape (M, 2): (d_rel, z^-1)
+        if len(filtered_blocks[0]) > 0: # far row needs a surviving point, near row alone spans ~one depth
+            ridge_model = Ridge(alpha=0.001)
+            ridge_model.fit(data_points[:, 0].reshape(-1, 1), data_points[:, 1])
+            self.slope = ridge_model.coef_[0]
+            self.intercept = ridge_model.intercept_
         else: #all calibration is invalid (likely because too close to obstacle)
             print("all calibration invalid (likely due to obstacle being too close)")
-            self.min_calibrated_rel = 100
-            self.max_calibrated_rel = 0
-        
-        self.fits = np.zeros((n_segment, 2))
-        self.segment_mins = [0]*(n_segment)
-
-        for i in range(n_segment):
-            data_points = groupings[i]
-            self.segment_mins[i] = data_points[:,0].min()
-            X = data_points[:, 0].reshape(-1, 1)
-            y = data_points[:, 1]
-            ridge_model = Ridge(alpha=0.001) 
-            ridge_model.fit(X, y)
-            self.fits[i] = [ridge_model.coef_[0], ridge_model.intercept_] # change the fit
         
         #Plot
         if plot:
             self.plot_scale_calibration(plot_file, filtered_blocks, plot_line=plot_line)
 
     
-    def relative_to_metric(self, d_rel: np.array, extrapolate= False) -> np.array:
-        if extrapolate:
-            valid_mask = (d_rel <= self.max_calibrated_rel)
-        else: 
-            valid_mask = (d_rel >= self.min_calibrated_rel) & (d_rel <= self.max_calibrated_rel)
-        valid_vals = d_rel[valid_mask] # np array of points within calibration
-
-        fit_idx = np.searchsorted(self.segment_mins, valid_vals, side='right') - 1
-        slopes = self.fits[fit_idx, 0]
-        intercepts = self.fits[fit_idx, 1]
-
-        result = np.full_like(d_rel, -1.0, dtype=float)
-        result[valid_mask] = 1 / (slopes * valid_vals + intercepts)
-        return result
+    def relative_to_metric(self, d_rel: np.array) -> np.array:
+        if self.slope is None: # no valid calibration this frame
+            return np.full_like(d_rel, -1.0, dtype=float)
+        return 1 / (self.slope * d_rel + self.intercept) # every pixel, no calibrated-range mask
     
 

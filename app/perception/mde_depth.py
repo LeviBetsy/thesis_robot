@@ -26,7 +26,7 @@ class MDE_Depth:
     def process_metric(self, frame):
         self.rel_depth = self.predictor.infer(frame)
         self.fsc.scale_calibration(self.rel_depth)
-        metric_depth = self.fsc.relative_to_metric(self.rel_depth, extrapolate=False)
+        metric_depth = self.fsc.relative_to_metric(self.rel_depth)
         return metric_depth
 
 

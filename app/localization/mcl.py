@@ -52,32 +52,6 @@ class MCLLocalization:
         self.caster = RayCaster(grid, robot.camera, config=config)
         self.particle_set = ParticleSet()
 
-    # ****** WIRING ******
-
-    def set_odometry(self, odometry):
-        """
-        Swaps in where the motion stage gets its increment, for when the source does not
-        exist yet at construction (the receiver and the filter are usually built first,
-        and a virtual rover may want a reference to this filter before it can be built).
-
-        CONTRACT, both halves of which the filter uses:
-          consume() -> (dx, dy, dtheta), the increment accumulated since ITS OWN last
-                       call, in the robot frame as of that last call, meters and radians,
-                       AND clears the accumulator so no motion is ever applied twice.
-          clear()   -> drops whatever has accumulated, called on re-seeding the cloud.
-
-        Subclassing Odometry gets both for free, along with the body-frame composition,
-        but nothing here checks the type: anything exposing those two methods drops in.
-
-        consume() is called on whichever thread runs on_scan (the ZMQ receiver thread)
-        while the source is being written on its own thread, so the read-and-clear must be
-        atomic. Odometry guards it with a lock; a replacement has to do the same.
-
-        Args:
-            odometry (Odometry): the source. None installs an inert one, i.e. the filter
-                                 runs measurement-only.
-        """
-        self.odometry = odometry if odometry is not None else Odometry()
 
     # ****** INITIALISATION ******
 

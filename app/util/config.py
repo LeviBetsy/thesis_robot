@@ -47,7 +47,7 @@ class PerceptionConfig:
     """Monocular depth estimation and the metric scaling in front of it."""
     mde_encoder: str           # vits / vitb / vitl
     mde_device: str            # "", "cuda", "mps", "cpu" - empty means autodetect
-    scale_group_n: int         # FloorScaleCalibration piecewise segments
+    scale_group_n: int         # FloorScaleCalibration checkerboard rows, used for the floor occlusion filter
     ground_z: float            # points below this height are floor and get dropped, meters
     jpeg_quality: int          # VideoStreamer frame compression
 
