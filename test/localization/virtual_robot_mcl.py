@@ -30,11 +30,11 @@ At startup a Gaussian cloud is scattered around START_POSE and scored against a 
 from the rover's true pose. Every SPACE press then runs one MCLLocalization.on_scan:
     motion        the rover's motion since the last press, via its Odometry
     measurement   z is ray cast from the rover's TRUE pose at the press, no noise added
-    resample      SKIPPED by default (do_resample=False), so the same particles are kept
-                  and their weights stay on screen. measurement_update overwrites the
-                  weights, so what is drawn is THIS scan's likelihood, not the product
-                  over presses. Pass --resample to run the real filter (resample after
-                  every scan) instead.
+    resample      run after every scan by default, like the real filter, so every weight
+                  is reset to 1/N and the cloud is drawn in one colour. Pass --no-resample
+                  to skip it: the same particles are kept and their weights stay on
+                  screen. measurement_update overwrites the weights, so what is drawn then
+                  is THIS scan's likelihood, not the product over presses.
 
 Drawn:
     blue -> red circles      particles, red and larger = higher weight (log-space ramp, see
@@ -63,7 +63,7 @@ pass a smaller --refresh-ms if that bothers you.
 '''
 
 CONFIG_PATH = "./config/robot_config.json"
-MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map1.json")
+MAP_PATH = os.path.join(os.path.dirname(__file__), "../../config/map/map2.json")
 
 # The test scenario, not tunables: meters / radians CCW from +x. Same starting pose as
 # measurement_model_test.py, facing the y=0.73 wall of map_wall. config.mcl.init_pose is not
@@ -208,7 +208,7 @@ class VirtualRobotVisualizer(ParticleWeightVisualizer):
     taking arrow keys from the page to drive it and SPACE to run a filter step.
     """
 
-    def bind(self, robot: VirtualRobot, mcl: MCLLocalization, do_resample=False):
+    def bind(self, robot: VirtualRobot, mcl: MCLLocalization, do_resample=True):
         self.robot = robot
         self.mcl = mcl
         self.n_scans = 0
@@ -223,11 +223,11 @@ class VirtualRobotVisualizer(ParticleWeightVisualizer):
         One SPACE press: hands the motion since the last press to the rover's Odometry,
         then runs mcl.on_scan on a noise-free scan cast from the rover's true pose.
 
-        do_resample (set via bind(), --resample on the command line) controls the last
-        filter stage: False (default) skips it so the same particles are kept and their
-        weights stay on screen (measurement_update overwrites the weights, so what is
-        drawn is THIS scan's likelihood, not the product over presses); True runs the
-        real filter, resampling after every scan.
+        do_resample (set via bind(), --no-resample on the command line) controls the last
+        filter stage: True (default) runs the real filter, resampling after every scan;
+        False skips it so the same particles are kept and their weights stay on screen
+        (measurement_update overwrites the weights, so what is drawn is THIS scan's
+        likelihood, not the product over presses).
         """
         with self.scan_lock:
             trans, rot1, rot2 = self.robot.mark()
@@ -367,9 +367,10 @@ if __name__ == "__main__":
     parser.add_argument("--sigma-x", type=float, help="cloud spread in x, meters, override config.mcl.init_sigma_x")
     parser.add_argument("--sigma-y", type=float, help="cloud spread in y, meters, override config.mcl.init_sigma_y")
     parser.add_argument("--sigma-theta", type=float, help="cloud spread in DEGREES, override config.mcl.init_sigma_theta")
-    parser.add_argument("--resample", action="store_true",
-                        help="resample after every filter step, like the real filter, instead of "
-                             "leaving each scan's weights on screen (default: off)")
+    parser.add_argument("--no-resample", dest="resample", action="store_false",
+                        help="skip resampling so the same particles are kept and each scan's "
+                             "weights stay on screen (default: resample after every step, like "
+                             "the real filter)")
     args = parser.parse_args()
     np.random.seed(args.seed)
 
@@ -390,9 +391,9 @@ if __name__ == "__main__":
     # The rover's own Odometry is the filter's motion source, so on_scan consumes exactly
     # what mark() accumulated, and the body frame resets at every press.
     mcl = MCLLocalization(robot, grid, config, odometry=rover.odometry)
-    # mcl.init_particles_gaussian(*START_POSE, sigma_x=sigma_x, sigma_y=sigma_y,
-    #                             sigma_theta=sigma_theta,
-    #                             max_attempts=config.mcl.init_max_attempts)
+    mcl.init_particles_gaussian(*START_POSE, sigma_x=sigma_x, sigma_y=sigma_y,
+                                sigma_theta=sigma_theta,
+                                max_attempts=config.mcl.init_max_attempts)
 
     vconfig = config.visualizer
     vis = VirtualRobotVisualizer(grid, host=vconfig.host, port=vconfig.port,

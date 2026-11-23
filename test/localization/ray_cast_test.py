@@ -34,17 +34,17 @@ Run from anywhere:
 
 config = Config.load("./config/robot_config.json")
 robot = Robot(config)
-MAP_PATH = "./config/map/map2.json"
+MAP_PATH = "./config/map/map3.json"
 # poses in meters / radians CCW from +x, each with what it should show
 TEST_POSES = [
-    # ((0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
+    ((0.20, 0.20, -math.pi / 2),      "facing the y=0 perimeter"),
     # ((0.20, 0.20, 0.0),               "facing +x, RIGHT (high index) rays hit the y=0 perimeter"),
-    # ((0.20, 0.55, -math.pi / 2),      "facing down at the y=0.37 wall"),
-    # ((0.55, 0.45, math.pi / 2),       "facing up at the y=0.73 wall"),
-    # ((0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
-    # ((0.85, 1.30, math.radians(135)), "diagonal, mixed hits and misses"),
-    # ((0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
-    ((0.60, 0.40, math.pi/2), "something")
+    ((0.20, 0.55, -math.pi / 2),      "facing down at the y=0.37 wall"),
+    ((0.55, 0.45, math.pi / 2),       "facing up at the y=0.73 wall"),
+    ((0.70, 0.55, 0.0),               "facing the x=0.90 wall"),
+    ((0.85, 1.00, math.radians(135)), "diagonal toward the y=1.205 top wall"),
+    ((0.55, 0.20, math.radians(135)), "diagonal toward the y=0.37 wall"),
+    # ((0.60, 0.40, math.pi/2), "something")
 ]
 
 # BGR, one per pose
@@ -98,7 +98,8 @@ if __name__ == "__main__":
     parser.add_argument("--save", help="write the render to this PNG instead of serving it")
     args = parser.parse_args()
 
-    grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0)
+    #no placeable buffer: it is 0.7 < ray_cast.occ_threshold so it never blocks a ray, it only clutters the render
+    grid = OccupancyGrid.from_json(MAP_PATH, config, default_value=0, wall_buffer=False)
     caster = RayCaster(grid, robot.camera, config)
     poses = np.array([p for p, _ in TEST_POSES]) #shape (N, 3)
 

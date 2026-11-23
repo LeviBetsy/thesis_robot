@@ -74,7 +74,7 @@ class OccupancyGrid:
         return self.is_placeable(x, y)
 
     # verified not tested
-    def add_wall(self, x1, y1, x2, y2, placeable_margin=0.7, placeable_radius=0.05):
+    def add_wall(self, x1, y1, x2, y2, placeable_margin=0.7, placeable_radius=0.05, add_buffer=True):
         """
         Marks a one-cell-thick straight wall segment (in meters) as occupied, then raises
         every cell whose center lies within `placeable_radius` meters of a wall cell center
@@ -89,6 +89,7 @@ class OccupancyGrid:
             placeable_margin (float): value written into the buffer cells. Keep it above the
                                       occ_threshold is_placeable uses or it buffers nothing.
             placeable_radius (float): meters of clearance a particle needs from a wall.
+            add_buffer (bool): False paints only the wall cells and skips the margin band.
         """
         if x1 == x2:
             row_start, col = self.world_to_grid(x1, min(y1, y2))
@@ -108,6 +109,9 @@ class OccupancyGrid:
         col_lo, col_hi = np.clip([col_lo, col_hi], 0, self.cols - 1)
 
         self.data[row_lo:row_hi + 1, col_lo:col_hi + 1] = 1
+
+        if not add_buffer:
+            return
 
         # Widest a cell can sit from the wall on one axis and still be inside the radius.
         # Rounded like world_to_grid: radius/cell_size on an exact multiple lands a hair
@@ -130,7 +134,7 @@ class OccupancyGrid:
         np.maximum(band, placeable_margin, out=band, where=within)
 
     @classmethod
-    def from_json(cls, filepath, config: Config, default_value=0.5):
+    def from_json(cls, filepath, config: Config, default_value=0.5, wall_buffer=True):
         """
         Builds a fully populated grid from a single JSON map file (shared by both laptop
         and Pi), rather than constructing the grid and adding walls as separate steps.
@@ -153,6 +157,8 @@ class OccupancyGrid:
             config (Config): supplies the wall buffer, config.map.placeable_margin and
                              config.map.placeable_radius, for every wall in the file.
             default_value (float): fill value for cells with no wall, forwarded to __init__.
+            wall_buffer (bool): False skips the placeable-margin band around every wall,
+                                leaving only the one-cell walls occupied.
         Returns:
             grid (OccupancyGrid): a new grid with every wall from the file already added.
         """
@@ -162,5 +168,6 @@ class OccupancyGrid:
         grid = cls(layout["width"], layout["length"], layout["cell_size"], default_value)
         for wall in layout.get("walls", []):
             grid.add_wall(wall["x1"], wall["y1"], wall["x2"], wall["y2"],
-                          config.map.placeable_margin, config.map.placeable_radius)
+                          config.map.placeable_margin, config.map.placeable_radius,
+                          add_buffer=wall_buffer)
         return grid

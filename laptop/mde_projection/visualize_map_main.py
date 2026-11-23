@@ -8,7 +8,7 @@ from app.util.config import Config
 
 def visualize_map():
     config = Config.load()
-    map = OccupancyGrid.from_json("config/map/real_map0.json", config, default_value=0)
+    map = OccupancyGrid.from_json("config/map/real_map0.json", config, default_value=0, wall_buffer=True)
 
     goal_streamer = GoalStreamer(port=config.stream.goal_port) #picked cell -> nav.py's goal on the Pi
     map_visualizer = MapVisualizer(map, on_pick=goal_streamer.send_goal)

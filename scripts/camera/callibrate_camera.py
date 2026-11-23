@@ -37,7 +37,7 @@ def calibrate_fisheye():
         if cornersFound == True:
             worldPtsList.append(worldPtsCur.reshape(-1, 1, 3).astype(np.float32))
             cornersRefined = cv2.cornerSubPix(imgGray, cornersOrg, (11, 11), (-1, -1), termCriteria)
-            imgPtsList.append(cornersRefined)
+            imgPtsList.append(cornersRefined.reshape(-1, 1, 2).astype(np.float32))
         else:
             raise Exception(f"cant detect corner for img {curImgPath}, exiting program")
     N_OK = len(worldPtsList)
@@ -59,6 +59,7 @@ def calibrate_fisheye():
             (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
         )
     print("Found " + str(N_OK) + " valid images for calibration")
+    print(f"RMS reprojection error: {rms:.4f} px")
     print("K=np.array(" + str(K.tolist()) + ")")
     print("D=np.array(" + str(D.tolist()) + ")")
 

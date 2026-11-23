@@ -15,7 +15,7 @@ class PointCloudVisualizer:
         ctr = self.vis.get_view_control()
         ctr.set_constant_z_near(0.01)
         ctr.set_constant_z_far(100.0)
-        self.cmap = plt.get_cmap("turbo")
+        self.cmap = plt.get_cmap("turbo_r")
 
     def update(self, pcd: np.ndarray):
         if pcd.size > 0:

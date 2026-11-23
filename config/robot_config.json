@@ -25,7 +25,7 @@
     },
     "map": {
         "placeable_margin": 0.7,
-        "placeable_radius": 0.16
+        "placeable_radius": 0.14
     },
     "ray_cast": {
         "n_rays": 16,
@@ -78,8 +78,8 @@
         "turn_cps": 180,
         "turn_slow_cps": 60,
         "turn_slow_window": 0.26,
-        "drive_cps": 300,
-        "drive_slow_cps": 150,
+        "drive_cps": 250,
+        "drive_slow_cps": 50,
         "drive_slow_window": 0.05,
         "turn_brake": 0.0,
         "drive_brake": 0.0

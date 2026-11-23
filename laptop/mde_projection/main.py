@@ -7,6 +7,7 @@ import threading
 import numpy as np
 
 from app.perception.mde_depth import MDE_Depth
+from app.perception.dav2_pth import DepthAnythingPredictor
 from app.perception.point_cloud_visualizer import PointCloudVisualizer
 from app.stream.zmq_stream import VideoReceiver, RangeStreamer
 from app.util.config import Config
@@ -180,6 +181,7 @@ if __name__ == "__main__":
     real_time_stream(cv_show=False, visualize=False)
     # real_time_stream()
     # real_time_visualize(cv_show=True)
+    # real_time_dav2_visualize(cv_show=True)
     # static_process("./data/ref23.jpg")
     # static_calibration_plot("./data/checkerboard/ref13.jpg")
     # benchmark_latency("./data/checkerboard/ref13.jpg")

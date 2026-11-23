@@ -24,7 +24,6 @@ The system's architecture is distributed across three main hardware components:
 | `laptop/mde_projection` | Laptop | Depth model inference, depth → range projection, map visualization |
 | `test/` | Pi | Entry points and manual test scripts |
 | `config/` | both | `robot_config.json` and maps under `config/map/` |
-| `app/yolo` | — | Archived, unused |
 
 Configuration (camera intrinsics, FOV, geometry, map files) lives in `config/` — read it through the config loader rather than hardcoding values in scripts.
 
@@ -53,7 +52,7 @@ mkdir -p $TMPDIR
 
 ```bash
 # perception / YOLO / general
-pip install opencv-python ultralytics pyserial scikit-learn
+pip install opencv-python pyserial scikit-learn
 
 # test + control scripts
 pip install pynput python-dotenv
@@ -196,7 +195,7 @@ tail -f data/odometry_log.txt
 ## Running YOLO v26 and other things
 export TMPDIR=$HOME/pip_tmp
 mkdir -p $TMPDIR
-- pip install opencv-python ultralytics pyserial scikit-learn
+- pip install opencv-python pyserial scikit-learn
 ## Running Test code
 - pip install pynput python-dotenv
 

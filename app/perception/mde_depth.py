@@ -93,6 +93,3 @@ class MDE_Depth:
         """Processes a single frame end-to-end into ray-casted ranges. See pcd_to_ray_casting for details."""
         pcd = self.frame_to_pcd(frame, delete_ground=delete_ground)
         return self.pcd_to_ray_casting(pcd, n_rays=n_rays, max_range=max_range)
-
-    def annotate_floor(self, frame):
-        return self.fsc.annotate_floor(frame)
